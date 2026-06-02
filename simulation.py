@@ -247,6 +247,6 @@ def run_simulations(n, groups, elo_dict, beta_home, beta_away):
 
 # Helper function to normalize progression totals into probabilities
 def normalize_progression(progression_totals, n):
-    df = pd.Dataframe(progression_totals).T
+    df = pd.DataFrame(progression_totals).T
     return df / n
 
