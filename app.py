@@ -11,8 +11,37 @@ sys.path.append(PROJECT_ROOT)
 
 from src.models.poisson import train_model, get_lambda
 from src.models.hybrid import HybridWorldCupModel
-from simulation import run_simulations, world_cup_2026_groups
+from simulation import run_simulations, world_cup_2026_groups, build_match_prob_cache
 
+PRIMARY = "#0B1F3A"     # deep navy
+ACCENT = "#E10600"      # FIFA red
+GOLD = "#F5C518"        # trophy gold
+LIGHT = "#F4F6F8"
+CARD = "#111827"
+
+st.markdown(f"""
+    <style>
+        .hero {{
+            background: linear-gradient(90deg, {PRIMARY}, #1C3D73);
+            padding: 20px;
+            border-radius: 12px;
+            color: white;
+        }}
+        .hero h1 {{
+            font-size: 42px;
+            margin-bottom: 0;
+        }}
+        .hero p {{
+            margin-top: 5px;
+            opacity: 0.85;
+        }}
+    </style>
+
+    <div class="hero">
+        <h1>FIFA World Cup 2026 Simulator</h1>
+        <p>AI-powered hybrid engine • Monte Carlo simulations • Live tournament projection</p>
+    </div>
+""", unsafe_allow_html=True)
 
 # ---------------------------
 # CACHING (IMPORTANT FOR STREAMLIT)
@@ -28,15 +57,26 @@ def load_data():
 def load_hybrid_model():
     return HybridWorldCupModel.load("models/hybrid.pkl")
 
+@st.cache_resource
+def load_prob_cache(_teams):
+    model = HybridWorldCupModel.load("models/hybrid.pkl")
+    return build_match_prob_cache(_teams, model, save_path="models/prob_cache.pkl")
 
 # ---------------------------
-# LOAD DATA
+# LOAD DATA + ELO RANKINGS + TEAM INFO
 # ---------------------------
 df, final_elo = load_data()
 
 elo_dict = dict(zip(final_elo["team"], final_elo["elo"]))
+teams = sorted({
+    team
+    for group in world_cup_2026_groups.values()
+    for team in group
+})
 
 model = load_hybrid_model()
+prob_cache = load_prob_cache(tuple(teams))
+
 
 # Poisson params ONLY for simulation layer
 # Cache poisson params
@@ -46,6 +86,20 @@ def get_poisson_params(df):
 
 beta_home, beta_away = get_poisson_params(df)
 
+# SHOW WORLD CUP 26 GROUP STAGES
+def render_group_table(group_name, standings):
+    df = pd.DataFrame(standings).sort_values(
+        ["points", "gd", "goals"],
+        ascending=False
+    )
+
+    st.markdown(f"### Group {group_name}")
+
+    styled = df.style \
+        .background_gradient(subset=["points"], cmap="Blues") \
+        .format(precision=0)
+
+    st.dataframe(styled, use_container_width=True)
 
 # ---------------------------
 # UI CONFIG
@@ -125,29 +179,25 @@ if st.button("Predict Match (Hybrid)"):
 # =========================================================
 # SECTION 2: TOURNAMENT SIMULATION
 # =========================================================
-st.header("🏆 Monte Carlo Tournament Simulation")
+with st.sidebar:
+    st.header("⚙️ Simulation Controls")
 
-n_sims = st.sidebar.slider(
-    "Simulations",
-    500,
-    10000,
-    2000,
-    step=500
-)
+    n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100)
 
-run = st.sidebar.button("Run Simulation")
+    show_live = st.toggle("🎥 Live Simulation Mode", value=False)
 
+    run = st.button("🚀 Run Simulation")
 
 # ---------------------------
 # RUN SIMULATION (COMPUTE ONLY)
 # ---------------------------
 if run:
+    with st.spinner("Simulating World Cup 2026..."):
 
-    with st.spinner("Simulating tournaments..."):
-
-        results, progression = run_simulations(
+        results, progression, group_results = run_simulations(
             n_sims,
             world_cup_2026_groups,
+            prob_cache,
             elo_dict,
             beta_home,
             beta_away
@@ -157,6 +207,7 @@ if run:
     st.session_state["results"] = results
     st.session_state["progression"] = progression
     st.session_state["n_sims"] = n_sims
+    st.session_state["group_results"] = group_results
 
     st.success("Simulation complete!")
 
@@ -198,6 +249,22 @@ if "results" in st.session_state:
     st.dataframe(
         prog_df.sort_values("Winner", ascending=False).head(20)
     )
+
+
+# ---------------------------
+# DISPLAY RESULTS (ALWAYS IF AVAILABLE)
+# ---------------------------
+if "group_results" in st.session_state:
+
+    st.subheader("📊 Group Stage Standings")
+
+    group_results = st.session_state["group_results"]
+
+    cols = st.columns(4)
+
+    for i, (group, standings) in enumerate(group_results.items()):
+        with cols[i % 4]:
+            render_group_table(group, standings)
 
 # =========================================================
 # 🔎 SECTION 3: TEAM EXPLORER
