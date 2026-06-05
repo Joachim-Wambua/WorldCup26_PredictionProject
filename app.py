@@ -19,28 +19,124 @@ GOLD = "#F5C518"        # trophy gold
 LIGHT = "#F4F6F8"
 CARD = "#111827"
 
-st.markdown(f"""
-    <style>
-        .hero {{
-            background: linear-gradient(90deg, {PRIMARY}, #1C3D73);
-            padding: 20px;
-            border-radius: 12px;
-            color: white;
-        }}
-        .hero h1 {{
-            font-size: 42px;
-            margin-bottom: 0;
-        }}
-        .hero p {{
-            margin-top: 5px;
-            opacity: 0.85;
-        }}
-    </style>
+FLAG_URLS = {
+    "Mexico": "https://flagcdn.com/w320/mx.png",
+    "South Africa": "https://flagcdn.com/w320/za.png",
+    "South Korea": "https://flagcdn.com/w320/kr.png",
+    "Czechia": "https://flagcdn.com/w320/cz.png",
 
-    <div class="hero">
+    "Canada": "https://flagcdn.com/w320/ca.png",
+    "Bosnia and Herzegovina": "https://flagcdn.com/w320/ba.png",
+    "Qatar": "https://flagcdn.com/w320/qa.png",
+    "Switzerland": "https://flagcdn.com/w320/ch.png",
+
+    "Brazil": "https://flagcdn.com/w320/br.png",
+    "Morocco": "https://flagcdn.com/w320/ma.png",
+    "Haiti": "https://flagcdn.com/w320/ht.png",
+    "Scotland": "https://flagcdn.com/w320/gb-sct.png",
+
+    "USA": "https://flagcdn.com/w320/us.png",
+    "Paraguay": "https://flagcdn.com/w320/py.png",
+    "Australia": "https://flagcdn.com/w320/au.png",
+    "Türkiye": "https://flagcdn.com/w320/tr.png",
+
+    "Germany": "https://flagcdn.com/w320/de.png",
+    "Curacao": "https://flagcdn.com/w320/cw.png",
+    "Ivory Coast": "https://flagcdn.com/w320/ci.png",
+    "Ecuador": "https://flagcdn.com/w320/ec.png",
+
+    "Netherlands": "https://flagcdn.com/w320/nl.png",
+    "Japan": "https://flagcdn.com/w320/jp.png",
+    "Sweden": "https://flagcdn.com/w320/se.png",
+    "Tunisia": "https://flagcdn.com/w320/tn.png",
+
+    "Belgium": "https://flagcdn.com/w320/be.png",
+    "Egypt": "https://flagcdn.com/w320/eg.png",
+    "Iran": "https://flagcdn.com/w320/ir.png",
+    "New Zealand": "https://flagcdn.com/w320/nz.png",
+
+    "Spain": "https://flagcdn.com/w320/es.png",
+    "Cape Verde": "https://flagcdn.com/w320/cv.png",
+    "Saudi Arabia": "https://flagcdn.com/w320/sa.png",
+    "Uruguay": "https://flagcdn.com/w320/uy.png",
+
+    "France": "https://flagcdn.com/w320/fr.png",
+    "Senegal": "https://flagcdn.com/w320/sn.png",
+    "Iraq": "https://flagcdn.com/w320/iq.png",
+    "Norway": "https://flagcdn.com/w320/no.png",
+
+    "Argentina": "https://flagcdn.com/w320/ar.png",
+    "Algeria": "https://flagcdn.com/w320/dz.png",
+    "Austria": "https://flagcdn.com/w320/at.png",
+    "Jordan": "https://flagcdn.com/w320/jo.png",
+
+    "Portugal": "https://flagcdn.com/w320/pt.png",
+    "Congo DR": "https://flagcdn.com/w320/cd.png",
+    "Uzbekistan": "https://flagcdn.com/w320/uz.png",
+    "Colombia": "https://flagcdn.com/w320/co.png",
+
+    "England": "https://flagcdn.com/w320/gb-eng.png",
+    "Croatia": "https://flagcdn.com/w320/hr.png",
+    "Ghana": "https://flagcdn.com/w320/gh.png",
+    "Panama": "https://flagcdn.com/w320/pa.png",
+}
+
+st.markdown(f"""
+<style>
+.hero {{
+    background: linear-gradient(135deg, {PRIMARY}, #1C3D73);
+    padding: 30px;
+    border-radius: 16px;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}}
+
+.hero-text h1 {{
+    font-size: 40px;
+    margin-bottom: 5px;
+}}
+
+.hero-text p {{
+    opacity: 0.85;
+    font-size: 16px;
+}}
+
+.hero img {{
+    height: 80px;
+}}
+
+.match-card {{
+    background: {CARD};
+    padding: 20px;
+    border-radius: 14px;
+    text-align: center;
+    color: white;
+}}
+
+.team-row {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}}
+
+.team {{
+    text-align: center;
+}}
+
+.team img {{
+    width: 60px;
+}}
+</style>
+
+<div class="hero">
+    <div class="hero-text">
         <h1>FIFA World Cup 2026 Simulator</h1>
-        <p>AI-powered hybrid engine • Monte Carlo simulations • Live tournament projection</p>
+        <p>AI-powered Hybrid Engine • Monte Carlo Simulation • Broadcast Analytics</p>
     </div>
+    <img src="https://assets.football-logos.cc/logos/tournaments/900x900/fifa-world-cup-2026--white.9ba8a004.png">
+</div>
 """, unsafe_allow_html=True)
 
 # ---------------------------
@@ -66,6 +162,10 @@ def load_prob_cache(_teams):
 # LOAD DATA + ELO RANKINGS + TEAM INFO
 # ---------------------------
 df, final_elo = load_data()
+
+# Map Flag images to relevant countries
+df["home_flag"] = df["home_team"].map(FLAG_URLS)
+df["away_flag"] = df["away_team"].map(FLAG_URLS)
 
 elo_dict = dict(zip(final_elo["team"], final_elo["elo"]))
 teams = sorted({
@@ -93,28 +193,45 @@ def render_group_table(group_name, standings):
         ascending=False
     )
 
+    # Add flags
+    df["Flag"] = df.index.map(lambda t: f'<img src="{get_flag(t)}" width="25">')
+
+    df = df.reset_index().rename(columns={"index": "Team"})
+
     st.markdown(f"### Group {group_name}")
 
-    styled = df.style \
-        .background_gradient(subset=["points"], cmap="Blues") \
-        .format(precision=0)
+    st.markdown(
+        df.to_html(escape=False, index=False),
+        unsafe_allow_html=True
+    )
 
-    st.dataframe(styled, use_container_width=True)
+# GET COUNTRY FLAG HELPER FUNCTION
+def get_flag(team):
+    return FLAG_URLS.get(team, "https://flagcdn.com/w320/un.png")
 
 # ---------------------------
 # UI CONFIG
 # ---------------------------
 st.set_page_config(page_title="World Cup Simulator", layout="wide")
 
-st.title("⚽ World Cup 2026 Simulator Dashboard")
 
+# st.image(
+#     "https://assets.football-logos.cc/logos/tournaments/700x700/fifa-world-cup-2026--white.9ba8a004.png",
+#     width=250
+# )
+# st.title("World Cup 2026 Simulator Dashboard")
 
 # =========================================================
 # SECTION 1: HYBRID MATCH PREDICTOR
 # =========================================================
-st.header("⚽ Hybrid Match Predictor")
 
-teams = sorted(elo_dict.keys())
+teams = sorted({
+    team
+    for group in world_cup_2026_groups.values()
+    for team in group
+})
+
+st.markdown("## Hybrid Match Predictor")
 
 col1, col2 = st.columns(2)
 
@@ -123,6 +240,26 @@ with col1:
 
 with col2:
     team2 = st.selectbox("Away Team", teams, key="t2")
+
+
+# --- MATCH CARD UI ---
+st.markdown(f"""
+<div class="match-card">
+    <div class="team-row">
+        <div class="team">
+            <img src="{get_flag(team1)}">
+            <p>{team1}</p>
+        </div>
+        <div>
+            <h2>VS</h2>
+        </div>
+        <div class="team">
+            <img src="{get_flag(team2)}">
+            <p>{team2}</p>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 if model is None:
     st.error("Hybrid model not loaded")
@@ -285,7 +422,12 @@ if "progression" in st.session_state:
 
 if prog_df is not None and team in prog_df.index:
 
-    st.write(f"### Progression probabilities: {team}")
+    st.markdown(f"""
+        <div style="display:flex; align-items:center; gap:10px;">
+            <img src="{get_flag(team)}" width="40">
+            <h3 style="margin:0;">{team}</h3>
+        </div>
+        """, unsafe_allow_html=True)
     st.bar_chart(prog_df.loc[team])
 
 else:
