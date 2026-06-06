@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os, sys
+import textwrap
 
 # ---------------------------
 # PATH SETUP
@@ -81,6 +82,59 @@ FLAG_URLS = {
     "Panama": "https://flagcdn.com/w320/pa.png",
 }
 
+st.markdown("""
+<style>
+.group-card {
+    background-color: #0e1117;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.group-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.team-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.team-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.team-flag img {
+    width: 24px;
+    border-radius: 3px;
+}
+
+.team-name {
+    font-size: 14px;
+}
+
+.team-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.qualify {
+    background-color: rgba(0, 200, 120, 0.12);
+    border-radius: 8px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 st.markdown(f"""
 <style>
 .hero {{
@@ -135,7 +189,7 @@ st.markdown(f"""
         <h1>FIFA World Cup 2026 Simulator</h1>
         <p>AI-powered Hybrid Engine • Monte Carlo Simulation • Broadcast Analytics</p>
     </div>
-    <img src="https://assets.football-logos.cc/logos/tournaments/900x900/fifa-world-cup-2026--white.9ba8a004.png">
+    <img src="https://assets.football-logos.cc/logos/tournaments/700x700/fifa-world-cup-2026--white.9ba8a004.png">
 </div>
 """, unsafe_allow_html=True)
 
@@ -187,23 +241,62 @@ def get_poisson_params(df):
 beta_home, beta_away = get_poisson_params(df)
 
 # SHOW WORLD CUP 26 GROUP STAGES
-def render_group_table(group_name, standings):
-    df = pd.DataFrame(standings).sort_values(
-        ["points", "gd", "goals"],
-        ascending=False
-    )
+def render_group_card(group_name, standings):
+    rows = []
 
-    # Add flags
-    df["Flag"] = df.index.map(lambda t: f'<img src="{get_flag(t)}" width="25">')
+    if isinstance(standings, dict):
+        for team, stats in standings.items():
+            rows.append({
+                "team": team,
+                "points": stats.get("points", 0),
+                "gd": stats.get("gd", 0),
+                "goals": stats.get("goals", 0),
+            })
+    else:
+        for item in standings:
+            team, stats = item if isinstance(item, tuple) else (item["team"], item)
+            rows.append({
+                "team": team,
+                "points": stats.get("points", 0),
+                "gd": stats.get("gd", 0),
+                "goals": stats.get("goals", 0),
+            })
 
-    df = df.reset_index().rename(columns={"index": "Team"})
+    df = pd.DataFrame(rows)
+    df = df.sort_values(["points", "gd", "goals"], ascending=False).reset_index(drop=True)
 
-    st.markdown(f"### Group {group_name}")
+    # Build rows separately (important)
+    rows_html = ""
 
-    st.markdown(
-        df.to_html(escape=False, index=False),
-        unsafe_allow_html=True
-    )
+    for i, row in df.iterrows():
+        team = row["team"]
+        flag = get_flag(team)
+        qualify_class = "team-row qualify" if i < 2 else "team-row"
+
+        rows_html += f"""
+<div class="{qualify_class}">
+    <div class="team-left">
+        <div class="team-flag">
+            <img src="{flag}">
+        </div>
+        <div class="team-name">{team}</div>
+    </div>
+    <div class="team-stats">
+        <div><b>{row['points']}</b> pts</div>
+        <div>{row['gd']} GD</div>
+        <div>{row['goals']} G</div>
+    </div>
+</div>
+"""
+
+    # ✅ Final card (NO indentation before <div)
+    card_html = f"""<div class="group-card">
+<div class="group-title">Group {group_name}</div>
+{rows_html}
+</div>"""
+
+    st.markdown(card_html.strip(), unsafe_allow_html=True)
+    # st.code(card_html)
 
 # GET COUNTRY FLAG HELPER FUNCTION
 def get_flag(team):
@@ -231,7 +324,7 @@ teams = sorted({
     for team in group
 })
 
-st.markdown("## Hybrid Match Predictor")
+st.markdown("## World Cup 2026 Match Predictor")
 
 col1, col2 = st.columns(2)
 
@@ -284,7 +377,7 @@ with colB:
 
 
 # --- Hybrid prediction ---
-if st.button("Predict Match (Hybrid)"):
+if st.button("Predict Match"):
     probs = model.predict(team1, team2)
 
     # Map Labels to Team Names
@@ -317,13 +410,13 @@ if st.button("Predict Match (Hybrid)"):
 # SECTION 2: TOURNAMENT SIMULATION
 # =========================================================
 with st.sidebar:
-    st.header("⚙️ Simulation Controls")
+    st.header("Simulation Controls")
 
-    n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100)
+    n_sims = st.slider("Slide to Select Number of Simulations", 100, 10000, 1000, step=100)
 
-    show_live = st.toggle("🎥 Live Simulation Mode", value=False)
+    show_live = st.toggle("Live Simulation Mode", value=False)
 
-    run = st.button("🚀 Run Simulation")
+    run = st.button("Run Simulation")
 
 # ---------------------------
 # RUN SIMULATION (COMPUTE ONLY)
@@ -401,7 +494,7 @@ if "group_results" in st.session_state:
 
     for i, (group, standings) in enumerate(group_results.items()):
         with cols[i % 4]:
-            render_group_table(group, standings)
+            render_group_card(group, standings)
 
 # =========================================================
 # 🔎 SECTION 3: TEAM EXPLORER
