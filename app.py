@@ -324,6 +324,12 @@ teams = sorted({
     for team in group
 })
 
+st.set_page_config(
+    page_title="World Cup 2026 Simulator",
+    page_icon="assets/worldcup2026.png",  # 👈 your logo
+    layout="wide"
+)
+
 st.markdown("## World Cup 2026 Match Predictor")
 
 col1, col2 = st.columns(2)
@@ -496,12 +502,12 @@ if "group_results" in st.session_state:
         with cols[i % 4]:
             render_group_card(group, standings)
 
-# =========================================================
+# ========================================================= 
 # 🔎 SECTION 3: TEAM EXPLORER
 # =========================================================
 st.header("🔎 Team Explorer")
 
-team = st.selectbox("Select Team", sorted(elo_dict.keys()), key="team_view")
+team = st.selectbox("Select Team", teams, key="team_view")
 
 prog_df = None
 
