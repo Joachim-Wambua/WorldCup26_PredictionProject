@@ -248,14 +248,17 @@ def simulate_knockout_round(teams, prob_cache, elo_dict, beta_home, beta_away):
 
     return winners
 
+
 def simulate_tournament(groups, prob_cache, elo_dict, beta_home, beta_away):
 
     progression = {
         team: {"R32":0,"R16":0,"QF":0,"SF":0,"Final":0,"Winner":0}
-        for group in groups.values() 
-        for team in group
+        for team in [t for g in groups.values() for t in g]
     }
 
+    # ---------------------------
+    # GROUP STAGE
+    # ---------------------------
     group_results, third_place = simulate_group_stage(
         groups, prob_cache, elo_dict, beta_home, beta_away
     )
@@ -268,39 +271,77 @@ def simulate_tournament(groups, prob_cache, elo_dict, beta_home, beta_away):
 
     seeded = seed_knockout(knockout_teams, elo_dict)
 
+    bracket = {}
+
+    # ---------------------------
+    # R32
+    # ---------------------------
     r32 = simulate_knockout_round(seeded, prob_cache, elo_dict, beta_home, beta_away)
+    r32_matches = [(seeded[i], seeded[i+1]) for i in range(0, 32, 2)]
+    bracket["R32"] = {"matches": r32_matches, "winners": r32}
+
     for t in r32:
         progression[t]["R16"] += 1
 
+    # ---------------------------
+    # R16
+    # ---------------------------
     r16 = simulate_knockout_round(r32, prob_cache, elo_dict, beta_home, beta_away)
+    r16_matches = [(r32[i], r32[i+1]) for i in range(0, 16, 2)]
+    bracket["R16"] = {"matches": r16_matches, "winners": r16}
+
     for t in r16:
         progression[t]["QF"] += 1
 
+    # ---------------------------
+    # QF
+    # ---------------------------
     qf = simulate_knockout_round(r16, prob_cache, elo_dict, beta_home, beta_away)
+    qf_matches = [(r16[i], r16[i+1]) for i in range(0, 8, 2)]
+    bracket["QF"] = {"matches": qf_matches, "winners": qf}
+
     for t in qf:
         progression[t]["SF"] += 1
 
+    # ---------------------------
+    # SF
+    # ---------------------------
     sf = simulate_knockout_round(qf, prob_cache, elo_dict, beta_home, beta_away)
+    sf_matches = [(qf[i], qf[i+1]) for i in range(0, 4, 2)]
+    bracket["SF"] = {"matches": sf_matches, "winners": sf}
+
     for t in sf:
         progression[t]["Final"] += 1
 
+    # ---------------------------
+    # FINAL
+    # ---------------------------
     final = simulate_knockout_round(sf, prob_cache, elo_dict, beta_home, beta_away)
+    final_match = [(sf[0], sf[1])]
+    bracket["Final"] = {"matches": final_match, "winners": final}
+
+    winner = final[0]
+
     for t in final:
         progression[t]["Winner"] += 1
 
-    return final[0], progression, group_results
+    return winner, progression, group_results, bracket
 
 def run_simulations(n, groups, prob_cache, elo_dict, beta_home, beta_away):
 
     winners = []
+
     progression_totals = {
         team: {"R32":0,"R16":0,"QF":0,"SF":0,"Final":0,"Winner":0}
         for team in [t for g in groups.values() for t in g]
     }
 
-    for _ in range(n):
+    first_bracket = None
+    first_group_results = None
 
-        winner, progression, group_results = simulate_tournament(
+    for i in range(n):
+
+        winner, progression, group_results, bracket = simulate_tournament(
             groups,
             prob_cache,
             elo_dict,
@@ -310,14 +351,17 @@ def run_simulations(n, groups, prob_cache, elo_dict, beta_home, beta_away):
 
         winners.append(winner)
 
+        # accumulate progression
         for team in progression:
             for stage in progression[team]:
                 progression_totals[team][stage] += progression[team][stage]
-        
-        if _ == 0:
+
+        # store first run for UI display
+        if i == 0:
+            first_bracket = bracket
             first_group_results = group_results
 
-    return dict(Counter(winners)), progression_totals, first_group_results
+    return dict(Counter(winners)), progression_totals, first_group_results, first_bracket
 
 # Helper function to normalize progression totals into probabilities
 def normalize_progression(progression_totals, n):

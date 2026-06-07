@@ -177,10 +177,56 @@ st.markdown(f"""
 
 .team {{
     text-align: center;
+    
 }}
 
 .team img {{
     width: 60px;
+}}
+
+.bracket {{
+    display: flex;
+    gap: 30px;
+    overflow-x: auto;
+    padding: 20px 0;
+}}
+
+.round {{
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 180px;
+}}
+
+.round h4 {{
+    text-align: center;
+    font-size: 14px;
+    opacity: 0.7;
+}}
+
+.match {{
+    background: #111827;
+    padding: 10px;
+    border-radius: 10px;
+}}
+
+.team {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    font-size: 13px;
+    opacity: 0.7;
+}}
+
+.team img {{
+    width: 18px;
+}}
+
+.team.winner {{
+    font-weight: bold;
+    opacity: 1;
+    color: #F5C518;
 }}
 </style>
 
@@ -202,6 +248,7 @@ def load_data():
     final_elo = pd.read_csv("data/processed/final_elo.csv")
     return df, final_elo
 
+np.random.seed(42)
 
 @st.cache_resource
 def load_hybrid_model():
@@ -298,6 +345,55 @@ def render_group_card(group_name, standings):
     st.markdown(card_html.strip(), unsafe_allow_html=True)
     # st.code(card_html)
 
+# RENDER KNOCKOUT BRACKETS
+def render_bracket(bracket_data):
+    html = """<div class="bracket">"""
+
+    rounds = ["R32", "R16", "QF", "SF", "Final"]
+
+    for r in rounds:
+        html += f'<div class="round"><h4>{r}</h4>'
+
+        round_data = bracket_data.get(r, {})
+        matches = round_data.get("matches", [])
+
+        for match in matches:
+            team1, team2 = match  # tuple unpacking
+
+            t1_flag = get_flag(team1)
+            t2_flag = get_flag(team2)
+
+            html += f"""
+<div class="match">
+    <div class="team">
+        <img src="{t1_flag}">
+        <span>{team1}</span>
+    </div>
+    <div class="team">
+        <img src="{t2_flag}">
+        <span>{team2}</span>
+    </div>
+</div>
+"""
+
+        html += "</div>"
+
+    html += "</div>"
+
+    st.markdown(html, unsafe_allow_html=True)
+
+
+# MAP PROGRESSION LOGIC INTO KNOCKOUT BRACKET FORMAT
+def build_bracket_from_sim(group_results, knockout_results):
+    return {
+        "R32": knockout_results["R32"],
+        "R16": knockout_results["R16"],
+        "QF": knockout_results["QF"],
+        "SF": knockout_results["SF"],
+        "Final": knockout_results["Final"],
+    }
+
+
 # GET COUNTRY FLAG HELPER FUNCTION
 def get_flag(team):
     return FLAG_URLS.get(team, "https://flagcdn.com/w320/un.png")
@@ -305,8 +401,11 @@ def get_flag(team):
 # ---------------------------
 # UI CONFIG
 # ---------------------------
-st.set_page_config(page_title="World Cup Simulator", layout="wide")
-
+st.set_page_config(
+    page_title="World Cup 2026 Simulator",
+    page_icon="assets/worldcup2026.png",
+    layout="wide"
+)
 
 # st.image(
 #     "https://assets.football-logos.cc/logos/tournaments/700x700/fifa-world-cup-2026--white.9ba8a004.png",
@@ -317,18 +416,11 @@ st.set_page_config(page_title="World Cup Simulator", layout="wide")
 # =========================================================
 # SECTION 1: HYBRID MATCH PREDICTOR
 # =========================================================
-
 teams = sorted({
     team
     for group in world_cup_2026_groups.values()
     for team in group
 })
-
-st.set_page_config(
-    page_title="World Cup 2026 Simulator",
-    page_icon="assets/worldcup2026.png",  # 👈 your logo
-    layout="wide"
-)
 
 st.markdown("## World Cup 2026 Match Predictor")
 
@@ -344,19 +436,19 @@ with col2:
 # --- MATCH CARD UI ---
 st.markdown(f"""
 <div class="match-card">
-    <div class="team-row">
-        <div class="team">
-            <img src="{get_flag(team1)}">
-            <p>{team1}</p>
-        </div>
-        <div>
-            <h2>VS</h2>
-        </div>
-        <div class="team">
-            <img src="{get_flag(team2)}">
-            <p>{team2}</p>
-        </div>
+<div class="team-row">
+    <div class="team">
+        <img src="{get_flag(team1)}" width="60">
+        <p>{team1}</p>
     </div>
+    <div>
+        <h2>VS</h2>
+    </div>
+    <div class="team">
+        <img src="{get_flag(team2)}" width="60">
+        <p>{team2}</p>
+    </div>
+</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -430,7 +522,7 @@ with st.sidebar:
 if run:
     with st.spinner("Simulating World Cup 2026..."):
 
-        results, progression, group_results = run_simulations(
+        results, progression, group_results, bracket = run_simulations(
             n_sims,
             world_cup_2026_groups,
             prob_cache,
@@ -444,6 +536,7 @@ if run:
     st.session_state["progression"] = progression
     st.session_state["n_sims"] = n_sims
     st.session_state["group_results"] = group_results
+    st.session_state["bracket"] = bracket
 
     st.success("Simulation complete!")
 
@@ -469,7 +562,7 @@ if "results" in st.session_state:
     results_df["probability"] = results_df["wins"] / n_sims
     results_df = results_df.sort_values("probability", ascending=False)
 
-    st.subheader("🏆 Winner Probabilities")
+    st.subheader("Winner Probabilities")
 
     st.bar_chart(results_df.head(10)["probability"])
     st.dataframe(results_df.head(20))
@@ -492,7 +585,7 @@ if "results" in st.session_state:
 # ---------------------------
 if "group_results" in st.session_state:
 
-    st.subheader("📊 Group Stage Standings")
+    st.subheader("Group Stage Standings")
 
     group_results = st.session_state["group_results"]
 
@@ -502,10 +595,30 @@ if "group_results" in st.session_state:
         with cols[i % 4]:
             render_group_card(group, standings)
 
+
+# ---------------------------
+# DISPLAY KNOCKOUT BRACKET
+# ---------------------------
+if "bracket" in st.session_state:
+    st.subheader("Knockout Bracket")
+    render_bracket(st.session_state["bracket"])
+
+    champion = st.session_state["results"]
+    winner = max(champion, key=champion.get)
+
+    st.markdown(f"""
+<div style="text-align:center; margin-top:20px;">
+    <h2>Champion</h2>
+    <img src="{get_flag(winner)}" width="60">
+    <h3>{winner}</h3>
+</div>
+""", unsafe_allow_html=True)
+
+
 # ========================================================= 
 # 🔎 SECTION 3: TEAM EXPLORER
 # =========================================================
-st.header("🔎 Team Explorer")
+st.header("Team Explorer")
 
 team = st.selectbox("Select Team", teams, key="team_view")
 
