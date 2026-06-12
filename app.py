@@ -2,22 +2,42 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os, sys
-import textwrap
 
 # ---------------------------
 # PATH SETUP
 # ---------------------------
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(APP_DIR, ".."))
 sys.path.append(PROJECT_ROOT)
+
+
+def resolve_path(relpath):
+    """Make data/model paths work no matter which directory the app is launched from."""
+    for base in (APP_DIR, PROJECT_ROOT, os.getcwd()):
+        candidate = os.path.join(base, relpath)
+        if os.path.exists(candidate):
+            return candidate
+    return relpath
+
 
 from src.models.poisson import train_model, get_lambda
 from src.models.hybrid import HybridWorldCupModel
 from simulation import run_simulations, world_cup_2026_groups, build_match_prob_cache
+from knockout_bracket import render_broadcast_bracket
 
+# ---------------------------
+# UI CONFIG (must be the FIRST Streamlit command)
+# ---------------------------
+st.set_page_config(
+    page_title="World Cup 2026 Simulator",
+    page_icon=resolve_path("assets/worldcup2026.png"),
+    layout="wide",
+)
+
+# ---------------------------
+# THEME CONSTANTS
+# ---------------------------
 PRIMARY = "#0B1F3A"     # deep navy
-ACCENT = "#E10600"      # FIFA red
-GOLD = "#F5C518"        # trophy gold
-LIGHT = "#F4F6F8"
 CARD = "#111827"
 
 FLAG_URLS = {
@@ -82,6 +102,15 @@ FLAG_URLS = {
     "Panama": "https://flagcdn.com/w320/pa.png",
 }
 
+
+# GET COUNTRY FLAG HELPER FUNCTION
+def get_flag(team):
+    return FLAG_URLS.get(team, "https://flagcdn.com/w320/un.png")
+
+
+# ---------------------------
+# GLOBAL CSS (group cards + hero + match predictor card)
+# ---------------------------
 st.markdown("""
 <style>
 .group-card {
@@ -131,7 +160,6 @@ st.markdown("""
     background-color: rgba(0, 200, 120, 0.12);
     border-radius: 8px;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -169,64 +197,24 @@ st.markdown(f"""
     color: white;
 }}
 
-.team-row {{
+.match-card .mc-row {{
     display: flex;
     align-items: center;
     justify-content: space-between;
 }}
 
-.team {{
-    text-align: center;
-    
-}}
-
-.team img {{
-    width: 60px;
-}}
-
-.bracket {{
-    display: flex;
-    gap: 30px;
-    overflow-x: auto;
-    padding: 20px 0;
-}}
-
-.round {{
+.match-card .mc-team {{
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    min-width: 180px;
-}}
-
-.round h4 {{
-    text-align: center;
-    font-size: 14px;
-    opacity: 0.7;
-}}
-
-.match {{
-    background: #111827;
-    padding: 10px;
-    border-radius: 10px;
-}}
-
-.team {{
-    display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     padding: 4px 6px;
-    font-size: 13px;
-    opacity: 0.7;
+    font-size: 14px;
 }}
 
-.team img {{
-    width: 18px;
-}}
-
-.team.winner {{
-    font-weight: bold;
-    opacity: 1;
-    color: #F5C518;
+.match-card .mc-team img {{
+    width: 54px;
+    border-radius: 4px;
 }}
 </style>
 
@@ -239,36 +227,44 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+
 # ---------------------------
 # CACHING (IMPORTANT FOR STREAMLIT)
 # ---------------------------
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data/processed/matches_with_features.csv")
-    final_elo = pd.read_csv("data/processed/final_elo.csv")
+    df = pd.read_csv(resolve_path("data/processed/matches_with_features.csv"))
+    final_elo = pd.read_csv(resolve_path("data/processed/final_elo.csv"))
     return df, final_elo
+
 
 np.random.seed(42)
 
-@st.cache_resource
-def load_hybrid_model():
-    return HybridWorldCupModel.load("models/hybrid.pkl")
 
 @st.cache_resource
-def load_prob_cache(_teams):
-    model = HybridWorldCupModel.load("models/hybrid.pkl")
-    return build_match_prob_cache(_teams, model, save_path="models/prob_cache.pkl")
+def load_hybrid_model():
+    return HybridWorldCupModel.load(resolve_path("models/hybrid.pkl"))
+
+
+@st.cache_resource
+def load_prob_cache(_model, _teams):
+    save_path = os.path.join(resolve_path("models"), "prob_cache.pkl")
+    return build_match_prob_cache(_teams, _model, save_path=save_path)
+
+
+@st.cache_resource
+def get_poisson_params(df):
+    return train_model(df)
+
 
 # ---------------------------
 # LOAD DATA + ELO RANKINGS + TEAM INFO
 # ---------------------------
 df, final_elo = load_data()
 
-# Map Flag images to relevant countries
-df["home_flag"] = df["home_team"].map(FLAG_URLS)
-df["away_flag"] = df["away_team"].map(FLAG_URLS)
-
 elo_dict = dict(zip(final_elo["team"], final_elo["elo"]))
+
+# Single source of truth for the team list (was previously defined twice)
 teams = sorted({
     team
     for group in world_cup_2026_groups.values()
@@ -276,16 +272,11 @@ teams = sorted({
 })
 
 model = load_hybrid_model()
-prob_cache = load_prob_cache(tuple(teams))
+prob_cache = load_prob_cache(model, tuple(teams))
 
-
-# Poisson params ONLY for simulation layer
-# Cache poisson params
-@st.cache_resource
-def get_poisson_params(df):
-    return train_model(df)
-
+# Poisson params ONLY for the simulation layer
 beta_home, beta_away = get_poisson_params(df)
+
 
 # SHOW WORLD CUP 26 GROUP STAGES
 def render_group_card(group_name, standings):
@@ -309,13 +300,13 @@ def render_group_card(group_name, standings):
                 "goals": stats.get("goals", 0),
             })
 
-    df = pd.DataFrame(rows)
-    df = df.sort_values(["points", "gd", "goals"], ascending=False).reset_index(drop=True)
+    table = pd.DataFrame(rows)
+    table = table.sort_values(["points", "gd", "goals"], ascending=False).reset_index(drop=True)
 
     # Build rows separately (important)
     rows_html = ""
 
-    for i, row in df.iterrows():
+    for i, row in table.iterrows():
         team = row["team"]
         flag = get_flag(team)
         qualify_class = "team-row qualify" if i < 2 else "team-row"
@@ -336,92 +327,18 @@ def render_group_card(group_name, standings):
 </div>
 """
 
-    # ✅ Final card (NO indentation before <div)
+    # Final card (NO indentation before <div>)
     card_html = f"""<div class="group-card">
 <div class="group-title">Group {group_name}</div>
 {rows_html}
 </div>"""
 
     st.markdown(card_html.strip(), unsafe_allow_html=True)
-    # st.code(card_html)
 
-# RENDER KNOCKOUT BRACKETS
-def render_bracket(bracket_data):
-    html = """<div class="bracket">"""
-
-    rounds = ["R32", "R16", "QF", "SF", "Final"]
-
-    for r in rounds:
-        html += f'<div class="round"><h4>{r}</h4>'
-
-        round_data = bracket_data.get(r, {})
-        matches = round_data.get("matches", [])
-
-        for match in matches:
-            team1, team2 = match  # tuple unpacking
-
-            t1_flag = get_flag(team1)
-            t2_flag = get_flag(team2)
-
-            html += f"""
-<div class="match">
-    <div class="team">
-        <img src="{t1_flag}">
-        <span>{team1}</span>
-    </div>
-    <div class="team">
-        <img src="{t2_flag}">
-        <span>{team2}</span>
-    </div>
-</div>
-"""
-
-        html += "</div>"
-
-    html += "</div>"
-
-    st.markdown(html, unsafe_allow_html=True)
-
-
-# MAP PROGRESSION LOGIC INTO KNOCKOUT BRACKET FORMAT
-def build_bracket_from_sim(group_results, knockout_results):
-    return {
-        "R32": knockout_results["R32"],
-        "R16": knockout_results["R16"],
-        "QF": knockout_results["QF"],
-        "SF": knockout_results["SF"],
-        "Final": knockout_results["Final"],
-    }
-
-
-# GET COUNTRY FLAG HELPER FUNCTION
-def get_flag(team):
-    return FLAG_URLS.get(team, "https://flagcdn.com/w320/un.png")
-
-# ---------------------------
-# UI CONFIG
-# ---------------------------
-st.set_page_config(
-    page_title="World Cup 2026 Simulator",
-    page_icon="assets/worldcup2026.png",
-    layout="wide"
-)
-
-# st.image(
-#     "https://assets.football-logos.cc/logos/tournaments/700x700/fifa-world-cup-2026--white.9ba8a004.png",
-#     width=250
-# )
-# st.title("World Cup 2026 Simulator Dashboard")
 
 # =========================================================
 # SECTION 1: HYBRID MATCH PREDICTOR
 # =========================================================
-teams = sorted({
-    team
-    for group in world_cup_2026_groups.values()
-    for team in group
-})
-
 st.markdown("## World Cup 2026 Match Predictor")
 
 col1, col2 = st.columns(2)
@@ -430,22 +347,25 @@ with col1:
     team1 = st.selectbox("Home Team", teams, key="t1")
 
 with col2:
-    team2 = st.selectbox("Away Team", teams, key="t2")
+    # Default the away team to a different side so the app doesn't open
+    # predicting a team against itself.
+    away_default = 1 if len(teams) > 1 else 0
+    team2 = st.selectbox("Away Team", teams, index=away_default, key="t2")
 
 
 # --- MATCH CARD UI ---
 st.markdown(f"""
 <div class="match-card">
-<div class="team-row">
-    <div class="team">
-        <img src="{get_flag(team1)}" width="60">
+<div class="mc-row">
+    <div class="mc-team">
+        <img src="{get_flag(team1)}">
         <p>{team1}</p>
     </div>
     <div>
         <h2>VS</h2>
     </div>
-    <div class="team">
-        <img src="{get_flag(team2)}" width="60">
+    <div class="mc-team">
+        <img src="{get_flag(team2)}">
         <p>{team2}</p>
     </div>
 </div>
@@ -456,53 +376,52 @@ if model is None:
     st.error("Hybrid model not loaded")
     st.stop()
 
-# --- Expected Goals (Poisson layer insight) ---
-lam_home, lam_away = get_lambda(
-    team1,
-    team2,
-    elo_dict,
-    model.beta_home,
-    model.beta_away
-)
-
-colA, colB = st.columns(2)
-
-with colA:
-    st.metric(team1, f"{lam_home:.2f} xG")
-
-with colB:
-    st.metric(team2, f"{lam_away:.2f} xG")
-
-
-# --- Hybrid prediction ---
-if st.button("Predict Match"):
-    probs = model.predict(team1, team2)
-
-    # Map Labels to Team Names
-    display_probs = {
-        f"{team1} win": probs["home_win"],
-        "Draw": probs["draw"],
-        f"{team2} win": probs["away_win"]
-    }
-
-    st.subheader("Match Outcome Probabilities")
-
-    prob_df = pd.DataFrame.from_dict(
-        display_probs,
-        orient="index",
-        columns=["probability"]
+if team1 == team2:
+    st.warning("Pick two different teams to predict a match.")
+else:
+    # --- Expected Goals (Poisson layer insight) ---
+    lam_home, lam_away = get_lambda(
+        team1,
+        team2,
+        elo_dict,
+        model.beta_home,
+        model.beta_away
     )
 
-    prob_df = prob_df.sort_values("probability", ascending=False)
+    colA, colB = st.columns(2)
 
-    st.bar_chart(prob_df)
+    with colA:
+        st.metric(team1, f"{lam_home:.2f} xG")
 
-    # Optional: cleaner JSON-style display
-    st.write(display_probs)
+    with colB:
+        st.metric(team2, f"{lam_away:.2f} xG")
 
-    winner = max(display_probs, key=display_probs.get)
+    # --- Hybrid prediction ---
+    if st.button("Predict Match"):
+        probs = model.predict(team1, team2)
 
-    st.success(f"Most likely outcome: {winner} ({display_probs[winner]:.1%})")
+        # Map Labels to Team Names
+        display_probs = {
+            f"{team1} win": probs["home_win"],
+            "Draw": probs["draw"],
+            f"{team2} win": probs["away_win"]
+        }
+
+        st.subheader("Match Outcome Probabilities")
+
+        prob_df = pd.DataFrame.from_dict(
+            display_probs,
+            orient="index",
+            columns=["probability"]
+        )
+
+        prob_df = prob_df.sort_values("probability", ascending=False)
+
+        st.bar_chart(prob_df)
+
+        winner = max(display_probs, key=display_probs.get)
+
+        st.success(f"Most likely outcome: {winner} ({display_probs[winner]:.1%})")
 
 # =========================================================
 # SECTION 2: TOURNAMENT SIMULATION
@@ -511,8 +430,6 @@ with st.sidebar:
     st.header("Simulation Controls")
 
     n_sims = st.slider("Slide to Select Number of Simulations", 100, 10000, 1000, step=100)
-
-    show_live = st.toggle("Live Simulation Mode", value=False)
 
     run = st.button("Run Simulation")
 
@@ -531,7 +448,7 @@ if run:
             beta_away
         )
 
-    # ✅ STORE EVERYTHING
+    # STORE EVERYTHING
     st.session_state["results"] = results
     st.session_state["progression"] = progression
     st.session_state["n_sims"] = n_sims
@@ -575,13 +492,16 @@ if "results" in st.session_state:
     prog_df = pd.DataFrame(progression).T
     prog_df = prog_df.div(n_sims)
 
+    # Guard: don't crash if the "Winner" column is missing from a partial run
+    sort_col = "Winner" if "Winner" in prog_df.columns else prog_df.columns[-1]
+
     st.dataframe(
-        prog_df.sort_values("Winner", ascending=False).head(20)
+        prog_df.sort_values(sort_col, ascending=False).head(20)
     )
 
 
 # ---------------------------
-# DISPLAY RESULTS (ALWAYS IF AVAILABLE)
+# DISPLAY GROUP STAGE
 # ---------------------------
 if "group_results" in st.session_state:
 
@@ -601,21 +521,18 @@ if "group_results" in st.session_state:
 # ---------------------------
 if "bracket" in st.session_state:
     st.subheader("Knockout Bracket")
-    render_bracket(st.session_state["bracket"])
 
-    champion = st.session_state["results"]
-    winner = max(champion, key=champion.get)
+    results = st.session_state["results"]
+    champion = max(results, key=results.get)
 
-    st.markdown(f"""
-<div style="text-align:center; margin-top:20px;">
-    <h2>Champion</h2>
-    <img src="{get_flag(winner)}" width="60">
-    <h3>{winner}</h3>
-</div>
-""", unsafe_allow_html=True)
+    render_broadcast_bracket(
+        st.session_state["bracket"],
+        get_flag,
+        champion=champion,
+    )
 
 
-# ========================================================= 
+# =========================================================
 # 🔎 SECTION 3: TEAM EXPLORER
 # =========================================================
 st.header("Team Explorer")
