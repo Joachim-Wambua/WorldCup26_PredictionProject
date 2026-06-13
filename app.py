@@ -113,52 +113,89 @@ def get_flag(team):
 # ---------------------------
 st.markdown("""
 <style>
+/* Group cards: colours are pinned explicitly so the dark card stays
+   readable regardless of the Streamlit theme (light OR dark). Previously
+   text colour was inherited, so on a light/bright theme you got dark text
+   on a dark card. */
 .group-card {
-    background-color: #0e1117;
+    background: linear-gradient(160deg, #0d2143 0%, #0b1424 100%);
+    border: 1px solid rgba(245,197,24,0.16);
     border-radius: 14px;
-    padding: 16px;
+    padding: 14px 16px 10px;
     margin-bottom: 18px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.30);
 }
 
 .group-title {
-    font-size: 18px;
+    font-size: 12px;
     font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #F5C518;
     margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
 }
 
 .team-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 4px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    margin-bottom: 2px;
 }
 
 .team-left {
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
 }
 
 .team-flag img {
     width: 24px;
+    height: 16px;
+    object-fit: cover;
     border-radius: 3px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.20);
+    display: block;
 }
 
 .team-name {
     font-size: 14px;
+    line-height: 1.2;
+    color: #f1f5f9;
 }
 
 .team-stats {
     display: flex;
-    gap: 12px;
+    gap: 14px;
     font-size: 13px;
+    color: #9fb0c3;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
+.team-stats b {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+/* Top-two qualifiers: green spine + brighter text */
 .qualify {
-    background-color: rgba(0, 200, 120, 0.12);
-    border-radius: 8px;
+    background: rgba(22,163,74,0.14);
+    box-shadow: inset 3px 0 0 #16a34a;
+}
+
+.qualify .team-name {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.qualify .team-stats b {
+    color: #86efac;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -303,7 +340,16 @@ def render_group_card(group_name, standings):
     table = pd.DataFrame(rows)
     table = table.sort_values(["points", "gd", "goals"], ascending=False).reset_index(drop=True)
 
-    # Build rows separately (important)
+    def fmt_gd(value):
+        # Show an explicit +/- on goal difference; fall back to str if non-numeric
+        try:
+            return f"{int(value):+d}"
+        except (ValueError, TypeError):
+            return str(value)
+
+    # Build rows as ONE blank-line-free string. Blank lines inside an HTML
+    # block make Streamlit's markdown parser close the block early and drop
+    # the styling wrapper, which made some cards render on the bare page.
     rows_html = ""
 
     for i, row in table.iterrows():
@@ -311,29 +357,28 @@ def render_group_card(group_name, standings):
         flag = get_flag(team)
         qualify_class = "team-row qualify" if i < 2 else "team-row"
 
-        rows_html += f"""
-<div class="{qualify_class}">
-    <div class="team-left">
-        <div class="team-flag">
-            <img src="{flag}">
-        </div>
-        <div class="team-name">{team}</div>
-    </div>
-    <div class="team-stats">
-        <div><b>{row['points']}</b> pts</div>
-        <div>{row['gd']} GD</div>
-        <div>{row['goals']} G</div>
-    </div>
-</div>
-"""
+        rows_html += (
+            f'<div class="{qualify_class}">'
+            f'<div class="team-left">'
+            f'<div class="team-flag"><img src="{flag}"></div>'
+            f'<div class="team-name">{team}</div>'
+            f'</div>'
+            f'<div class="team-stats">'
+            f'<div><b>{row["points"]}</b> pts</div>'
+            f'<div>{fmt_gd(row["gd"])} GD</div>'
+            f'<div>{row["goals"]} G</div>'
+            f'</div>'
+            f'</div>'
+        )
 
-    # Final card (NO indentation before <div>)
-    card_html = f"""<div class="group-card">
-<div class="group-title">Group {group_name}</div>
-{rows_html}
-</div>"""
+    card_html = (
+        f'<div class="group-card">'
+        f'<div class="group-title">Group {group_name}</div>'
+        f'{rows_html}'
+        f'</div>'
+    )
 
-    st.markdown(card_html.strip(), unsafe_allow_html=True)
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 # =========================================================
