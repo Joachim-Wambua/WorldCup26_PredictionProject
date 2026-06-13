@@ -51,57 +51,46 @@ FLAG_URLS = {
     "South Africa": "https://flagcdn.com/w320/za.png",
     "South Korea": "https://flagcdn.com/w320/kr.png",
     "Czechia": "https://flagcdn.com/w320/cz.png",
-
     "Canada": "https://flagcdn.com/w320/ca.png",
     "Bosnia and Herzegovina": "https://flagcdn.com/w320/ba.png",
     "Qatar": "https://flagcdn.com/w320/qa.png",
     "Switzerland": "https://flagcdn.com/w320/ch.png",
-
     "Brazil": "https://flagcdn.com/w320/br.png",
     "Morocco": "https://flagcdn.com/w320/ma.png",
     "Haiti": "https://flagcdn.com/w320/ht.png",
     "Scotland": "https://flagcdn.com/w320/gb-sct.png",
-
     "USA": "https://flagcdn.com/w320/us.png",
     "Paraguay": "https://flagcdn.com/w320/py.png",
     "Australia": "https://flagcdn.com/w320/au.png",
     "Türkiye": "https://flagcdn.com/w320/tr.png",
-
     "Germany": "https://flagcdn.com/w320/de.png",
     "Curacao": "https://flagcdn.com/w320/cw.png",
     "Ivory Coast": "https://flagcdn.com/w320/ci.png",
     "Ecuador": "https://flagcdn.com/w320/ec.png",
-
     "Netherlands": "https://flagcdn.com/w320/nl.png",
     "Japan": "https://flagcdn.com/w320/jp.png",
     "Sweden": "https://flagcdn.com/w320/se.png",
     "Tunisia": "https://flagcdn.com/w320/tn.png",
-
     "Belgium": "https://flagcdn.com/w320/be.png",
     "Egypt": "https://flagcdn.com/w320/eg.png",
     "Iran": "https://flagcdn.com/w320/ir.png",
     "New Zealand": "https://flagcdn.com/w320/nz.png",
-
     "Spain": "https://flagcdn.com/w320/es.png",
     "Cape Verde": "https://flagcdn.com/w320/cv.png",
     "Saudi Arabia": "https://flagcdn.com/w320/sa.png",
     "Uruguay": "https://flagcdn.com/w320/uy.png",
-
     "France": "https://flagcdn.com/w320/fr.png",
     "Senegal": "https://flagcdn.com/w320/sn.png",
     "Iraq": "https://flagcdn.com/w320/iq.png",
     "Norway": "https://flagcdn.com/w320/no.png",
-
     "Argentina": "https://flagcdn.com/w320/ar.png",
     "Algeria": "https://flagcdn.com/w320/dz.png",
     "Austria": "https://flagcdn.com/w320/at.png",
     "Jordan": "https://flagcdn.com/w320/jo.png",
-
     "Portugal": "https://flagcdn.com/w320/pt.png",
     "Congo DR": "https://flagcdn.com/w320/cd.png",
     "Uzbekistan": "https://flagcdn.com/w320/uz.png",
     "Colombia": "https://flagcdn.com/w320/co.png",
-
     "England": "https://flagcdn.com/w320/gb-eng.png",
     "Croatia": "https://flagcdn.com/w320/hr.png",
     "Ghana": "https://flagcdn.com/w320/gh.png",
@@ -109,24 +98,46 @@ FLAG_URLS = {
 }
 
 
-# GET COUNTRY FLAG HELPER FUNCTION
 def get_flag(team):
     return FLAG_URLS.get(team, "https://flagcdn.com/w320/un.png")
 
 
 # ---------------------------
-# GLOBAL CSS (group cards + hero + match predictor card)
+# GLOBAL CSS
 # ---------------------------
 st.markdown("""
 <style>
-/* Group cards: colours are pinned explicitly so the dark card stays
-   readable regardless of the Streamlit theme (light OR dark). */
+/* ---- Tab navigation (self-contained dark nav bar) ----
+   The tab bar carries its OWN navy background, so labels stay readable on ANY
+   Streamlit theme (light or dark). This avoids prefers-color-scheme, which
+   can't reliably detect Streamlit's rendered theme. Active tab = gold pill. */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px;
+    background: #0B1F3A;
+    border: 1px solid rgba(245,197,24,0.20);
+    border-radius: 12px;
+    padding: 5px 6px;
+    margin-bottom: 12px;
+}
+.stTabs [data-baseweb="tab"] {
+    font-weight: 600; letter-spacing: 0.01em; padding: 8px 20px;
+    border-radius: 8px;
+    color: #cbd5e1 !important;                 /* light slate on the navy bar */
+    background: transparent;
+}
+.stTabs [data-baseweb="tab"]:hover { color: #ffffff !important; }
+.stTabs [aria-selected="true"] {
+    color: #0B1F3A !important;                 /* navy text ... */
+    background: #F5C518 !important;            /* ... on a gold pill */
+}
+/* the gold pill marks the active tab, so hide the default sliding underline */
+.stTabs [data-baseweb="tab-highlight"] { background-color: transparent; }
+
+/* ---- Group cards ---- */
 .group-card {
     background: linear-gradient(160deg, #0d2143 0%, #0b1424 100%);
     border: 1px solid rgba(245,197,24,0.16);
-    border-radius: 14px;
-    padding: 14px 16px 10px;
-    margin-bottom: 18px;
+    border-radius: 14px; padding: 14px 16px 10px; margin-bottom: 18px;
     box-shadow: 0 6px 18px rgba(0,0,0,0.30);
 }
 .group-title {
@@ -165,13 +176,8 @@ st.markdown("""
     text-align: center; font-size: 11px; letter-spacing: 0.22em;
     text-transform: uppercase; color: rgba(245,197,24,0.9); margin-bottom: 14px;
 }
-.pred-main {
-    display: flex; align-items: center; justify-content: space-between; gap: 14px;
-}
-.pred-side {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
-    min-width: 0;
-}
+.pred-main { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.pred-side { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .pred-side img {
     width: 58px; height: 39px; object-fit: cover; border-radius: 4px;
     box-shadow: 0 0 0 1px rgba(255,255,255,0.25);
@@ -181,54 +187,42 @@ st.markdown("""
 .pred-center { flex: 0 0 auto; text-align: center; padding: 0 6px; }
 .pred-scoreline { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: 0.02em; }
 .pred-scoreline span { color: rgba(245,197,24,0.8); padding: 0 6px; }
-.pred-scoreprob { font-size: 11px; color: #93a4ba; margin-top: 6px;
-    text-transform: uppercase; letter-spacing: 0.12em; }
+.pred-scoreprob { font-size: 11px; color: #93a4ba; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.12em; }
 .pred-bar {
     display: flex; height: 26px; border-radius: 8px; overflow: hidden;
     margin: 18px 0 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
 }
-.pred-bar .seg {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; color: #0b1424; white-space: nowrap;
-}
+.pred-bar .seg { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #0b1424; white-space: nowrap; }
 .pred-bar .seg1 { background: #38bdf8; }
 .pred-bar .segd { background: #94a3b8; }
 .pred-bar .seg2 { background: #fb7185; }
-.pred-legend {
-    display: flex; justify-content: center; gap: 18px; font-size: 12px; color: #cbd5e1;
-}
-.pred-legend .dot { display: inline-block; width: 9px; height: 9px;
-    border-radius: 50%; margin-right: 6px; }
+.pred-legend { display: flex; justify-content: center; gap: 18px; font-size: 12px; color: #cbd5e1; }
+.pred-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 .pred-legend .d1 { background: #38bdf8; }
 .pred-legend .dd { background: #94a3b8; }
 .pred-legend .d2 { background: #fb7185; }
-.pred-alts {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-    justify-content: center; margin-top: 16px;
-}
-.pred-alts .alt-label {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: #7e90a6;
-}
-.pred-chip {
-    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 999px; padding: 4px 11px; font-size: 12px; color: #e2e8f0;
-}
+.pred-alts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+.pred-alts .alt-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: #7e90a6; }
+.pred-chip { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); border-radius: 999px; padding: 4px 11px; font-size: 12px; color: #e2e8f0; }
 .pred-chip b { color: #F5C518; }
+
+/* ---- Hero ---- */
+.hero {
+    background: linear-gradient(135deg, #0B1F3A, #1C3D73);
+    padding: 26px 30px; border-radius: 16px; color: white;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+}
+.hero-text h1 { font-size: 36px; margin-bottom: 4px; }
+.hero-text p { opacity: 0.85; font-size: 15px; }
+.hero img { height: 76px; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown(f"""
-<style>
-.hero {{
-    background: linear-gradient(135deg, {PRIMARY}, #1C3D73);
-    padding: 30px; border-radius: 16px; color: white;
-    display: flex; align-items: center; justify-content: space-between;
-}}
-.hero-text h1 {{ font-size: 40px; margin-bottom: 5px; }}
-.hero-text p {{ opacity: 0.85; font-size: 16px; }}
-.hero img {{ height: 80px; }}
-</style>
-
+# ---------------------------
+# HERO
+# ---------------------------
+st.markdown("""
 <div class="hero">
     <div class="hero-text">
         <h1>FIFA World Cup 2026 Simulator</h1>
@@ -240,7 +234,7 @@ st.markdown(f"""
 
 
 # ---------------------------
-# CACHING (IMPORTANT FOR STREAMLIT)
+# CACHING + LOADING
 # ---------------------------
 @st.cache_data
 def load_data():
@@ -265,23 +259,11 @@ def get_poisson_params(df):
     return train_model(df)
 
 
-# ---------------------------
-# LOAD DATA + ELO RANKINGS + TEAM INFO
-# ---------------------------
 df, final_elo = load_data()
-
 elo_dict = dict(zip(final_elo["team"], final_elo["elo"]))
-
-teams = sorted({
-    team
-    for group in world_cup_2026_groups.values()
-    for team in group
-})
-
+teams = sorted({team for group in world_cup_2026_groups.values() for team in group})
 model = load_hybrid_model()
 prob_cache = load_prob_cache(model, tuple(teams))
-
-# Poisson params ONLY for the simulation layer
 beta_home, beta_away = get_poisson_params(df)
 
 
@@ -290,7 +272,6 @@ beta_home, beta_away = get_poisson_params(df)
 # ---------------------------
 def render_group_card(group_name, standings):
     rows = []
-
     if isinstance(standings, dict):
         for team, stats in standings.items():
             rows.append({"team": team, "points": stats.get("points", 0),
@@ -342,12 +323,6 @@ def render_group_card(group_name, standings):
 # MATCH PREDICTOR HELPERS
 # ---------------------------
 def venue_aware_lambdas(team1, team2):
-    """Expected goals for team1, team2 with WC venue rules.
-
-    Neutral by default; the venue advantage is only applied when a host
-    (USA / Mexico / Canada) is involved, and it attaches to the host
-    regardless of which slot it sits in.
-    """
     neutral, home = resolve_venue(team1, team2)
     if neutral:
         l1, l2 = get_lambda(team1, team2, elo_dict, model.beta_home, model.beta_away, neutral=True)
@@ -359,8 +334,6 @@ def venue_aware_lambdas(team1, team2):
 
 
 def outcome_probs(team1, team2):
-    """[team1 win, draw, team2 win] — reuse the SAME cache the tournament uses
-    so the predictor and the simulation never disagree."""
     p = prob_cache.get((team1, team2))
     if p is None:
         neutral, home = resolve_venue(team1, team2)
@@ -370,9 +343,6 @@ def outcome_probs(team1, team2):
 
 
 def scoreline_matrix(l1, l2, max_goals=6):
-    # Dixon-Coles corrected joint scoreline (more realistic low scores / draws
-    # than independent Poisson). DEFAULT_RHO is a sensible default; for a
-    # data-driven value, run poisson.fit_rho() on your training set.
     return score_matrix(l1, l2, rho=DEFAULT_RHO, max_goals=max_goals)
 
 
@@ -387,9 +357,6 @@ def top_scorelines(M, k=3):
 
 
 def coherent_score(M, outcome):
-    """Most likely exact score consistent with the favoured outcome
-    ('home' | 'draw' | 'away'), so the predicted score never contradicts
-    the win bar."""
     n = M.shape[0]
     best, best_p = (1, 1), -1.0
     for i in range(n):
@@ -406,7 +373,6 @@ def coherent_score(M, outcome):
 
 
 def pct_round(values):
-    """Round a probability vector to ints summing to exactly 100 (largest remainder)."""
     raw = [v * 100 for v in values]
     floors = [int(np.floor(x)) for x in raw]
     remainder = 100 - sum(floors)
@@ -416,26 +382,22 @@ def pct_round(values):
     return floors
 
 
-# =========================================================
-# SECTION 1: MATCH PREDICTOR
-# =========================================================
-st.markdown("## World Cup 2026 Match Predictor")
+def render_match_predictor():
+    st.subheader("Head-to-head predictor")
+    st.caption("Pick two teams to see win/draw odds, a predicted scoreline, and expected goals. "
+               "Updates instantly — no button needed.")
 
-col1, col2 = st.columns(2)
-with col1:
-    team1 = st.selectbox("Team 1", teams, key="t1")
-with col2:
-    away_default = 1 if len(teams) > 1 else 0
-    team2 = st.selectbox("Team 2", teams, index=away_default, key="t2")
+    col1, col2 = st.columns(2)
+    with col1:
+        team1 = st.selectbox("Team 1", teams, key="t1")
+    with col2:
+        away_default = 1 if len(teams) > 1 else 0
+        team2 = st.selectbox("Team 2", teams, index=away_default, key="t2")
 
-if model is None:
-    st.error("Hybrid model not loaded")
-    st.stop()
+    if team1 == team2:
+        st.warning("Pick two different teams to predict a match.")
+        return
 
-if team1 == team2:
-    st.warning("Pick two different teams to predict a match.")
-else:
-    # --- compute everything (cheap, so no button needed) ---
     l1, l2, neutral, home = venue_aware_lambdas(team1, team2)
     p1, pdraw, p2 = outcome_probs(team1, team2)
 
@@ -443,22 +405,15 @@ else:
     outcome = ["home", "draw", "away"][int(np.argmax([p1, pdraw, p2]))]
     (gs1, gs2), score_p = coherent_score(M, outcome)
     alts = top_scorelines(M, 3)
-
     ph, pd_, pa = pct_round([p1, pdraw, p2])
 
-    if neutral:
-        venue_label = "Neutral venue"
-    else:
-        venue_label = f"{home} at home · host advantage applied"
+    venue_label = "Neutral venue" if neutral else f"{home} at home · host advantage applied"
 
     def seg(width, cls):
-        # hide the % label on very thin segments to avoid overflow
         label = f"{width}%" if width >= 8 else ""
         return f'<div class="seg {cls}" style="width:{width}%">{label}</div>'
 
-    chips = "".join(
-        f'<span class="pred-chip">{a}&ndash;{b} <b>{p:.0%}</b></span>' for a, b, p in alts
-    )
+    chips = "".join(f'<span class="pred-chip">{a}&ndash;{b} <b>{p:.0%}</b></span>' for a, b, p in alts)
 
     card = (
         '<div class="pred-card">'
@@ -494,118 +449,146 @@ else:
     st.caption(f"Most likely outcome: **{labels[outcome]}** ({conf}%) — predicted score {gs1}-{gs2}.")
 
 
-# =========================================================
-# SECTION 2: TOURNAMENT SIMULATION
-# =========================================================
+# ---------------------------
+# SIDEBAR — SIMULATION CONTROLS ONLY
+# ---------------------------
 with st.sidebar:
-    st.header("Simulation Controls")
-    n_sims = st.slider("Slide to Select Number of Simulations", 100, 5000, 1000, step=100)
-    run = st.button("Run Simulation")
+    st.markdown("### Simulation Controls")
+    n_sims = st.slider(
+        "Number of simulations", 100, 5000, 1000, step=100,
+        help="More runs = smoother odds. 1,000 is plenty for a quick look; "
+             "5,000 for stable probabilities.",
+    )
+    run = st.button("▶  Run Simulation", use_container_width=True, type="primary")
+    st.caption("Each run plays out the whole tournament thousands of times.")
 
-# ---------------------------
-# RUN SIMULATION (COMPUTE ONLY)
-# ---------------------------
-if run:
-    with st.spinner("Simulating World Cup 2026..."):
-        results, progression, group_results, bracket = run_simulations(
-            n_sims,
-            world_cup_2026_groups,
-            prob_cache,
-            elo_dict,
-            beta_home,
-            beta_away
+    st.divider()
+    with st.expander("About this app"):
+        st.markdown(
+            "A hybrid **Elo (Team Strength Rating) + Poisson + XGBoost** engine runs a Monte Carlo "
+            "simulation of FIFA World Cup 2026.\n\n"
+            "- **Match Predictor** — head-to-head odds & predicted score\n"
+            "- **Tournament Simulation** — Simulate the entire tournament. From group stage to knockout bracket & winner odds\n"
+            "- **Team Explorer** — how far each team is likely to go"
         )
 
+
+# ---------------------------
+# RUN SIMULATION (compute once, store in session)
+# ---------------------------
+if run:
+    with st.spinner(f"Simulating World Cup 2026 — {n_sims:,} tournaments..."):
+        results, progression, group_results, bracket = run_simulations(
+            n_sims, world_cup_2026_groups, prob_cache, elo_dict, beta_home, beta_away
+        )
     st.session_state["results"] = results
     st.session_state["progression"] = progression
     st.session_state["n_sims"] = n_sims
     st.session_state["group_results"] = group_results
     st.session_state["bracket"] = bracket
 
-    st.success("Simulation complete!")
 
+# ===========================================================================
+# MAIN NAVIGATION — TABS
+# ===========================================================================
+tab_predict, tab_sim, tab_team = st.tabs([
+    "Match Predictor",
+    "Tournament Simulation",
+    "Team Explorer",
+])
 
-# ---------------------------
-# GROUP STAGE
-# ---------------------------
-if "group_results" in st.session_state:
-
-    st.subheader("Group Stage Standings")
-    group_results = st.session_state["group_results"]
-    cols = st.columns(4)
-    for i, (group, standings) in enumerate(group_results.items()):
-        with cols[i % 4]:
-            render_group_card(group, standings)
-
-
-# ---------------------------
-# KNOCKOUT BRACKET
-# ---------------------------
-if "bracket" in st.session_state:
-
-    st.subheader("Knockout Bracket")
-    bracket = st.session_state["bracket"]
-
-    # Champion is taken from the displayed bracket itself, so the card can
-    # never contradict the Final shown above it.
-    final = bracket.get("Final", {})
-    champ_list = final.get("winners") or []
-    if champ_list:
-        champion = champ_list[0]
+# --- TAB 1: MATCH PREDICTOR ---
+with tab_predict:
+    if model is None:
+        st.error("Hybrid model not loaded")
     else:
-        champion = max(st.session_state["results"], key=st.session_state["results"].get)
+        render_match_predictor()
 
-    render_broadcast_bracket(bracket, get_flag, champion=champion)
-    st.caption(
-        "One representative tournament won by the most likely champion — "
-        "a single plausible path, not the full forecast. "
-        "See **Winner Probabilities** below for the model's actual odds."
-    )
+# --- TAB 2: TOURNAMENT SIMULATION ---
+with tab_sim:
+    if "results" not in st.session_state:
+        st.info(
+            "Set the number of simulations in the sidebar on the left, then click "
+            "**▶ Run Simulation** to generate a knockout bracket, group tables, and title odds."
+        )
+    else:
+        results = st.session_state["results"]
+        progression = st.session_state["progression"]
+        n_sims = st.session_state["n_sims"]
+        group_results = st.session_state["group_results"]
+        bracket = st.session_state["bracket"]
 
-# ---------------------------
-# WINNER PROBABILITIES + PROGRESSION
-# ---------------------------
-if "results" in st.session_state:
+        # Headline champion (taken from the displayed bracket so it can't drift)
+        final = bracket.get("Final", {})
+        champ_list = final.get("winners") or []
+        champion = champ_list[0] if champ_list else max(results, key=results.get)
 
-    results = st.session_state["results"]
-    progression = st.session_state["progression"]
-    n_sims = st.session_state["n_sims"]
+        # --- Knockout bracket ---
+        st.subheader("Knockout Bracket")
+        render_broadcast_bracket(bracket, get_flag, champion=champion)
+        st.caption(
+            "One representative tournament won by the most likely champion — a single "
+            "plausible path, not the full forecast (see Title Odds below)."
+        )
 
-    results_df = pd.DataFrame.from_dict(results, orient="index", columns=["wins"])
-    results_df["probability"] = results_df["wins"] / n_sims
-    results_df = results_df.sort_values("probability", ascending=False)
-
-    st.subheader("Winner Probabilities")
-    st.bar_chart(results_df.head(10)["probability"])
-    st.dataframe(results_df.head(20))
-
-    st.subheader("Tournament Progression")
-    prog_df = pd.DataFrame(progression).T
-    prog_df = prog_df.div(n_sims)
-    sort_col = "Winner" if "Winner" in prog_df.columns else prog_df.columns[-1]
-    st.dataframe(prog_df.sort_values(sort_col, ascending=False).head(20))
+        st.divider()
 
 
-# =========================================================
-# SECTION 3: TEAM EXPLORER
-# =========================================================
-st.header("Team Explorer")
+         # --- Group stage ---
+        st.subheader("Group Stage Standings")
+        st.caption("Top two of each group (green) advance, plus the eight best third-placed teams.")
+        cols = st.columns(4)
+        for i, (group, standings) in enumerate(group_results.items()):
+            with cols[i % 4]:
+                render_group_card(group, standings)
 
-team = st.selectbox("Select Team", teams, key="team_view")
+        st.divider()
 
-prog_df = None
-if "progression" in st.session_state:
-    n_sims = st.session_state["n_sims"]
-    prog_df = pd.DataFrame(st.session_state["progression"]).T
-    prog_df = prog_df.div(n_sims)
+        # --- Title odds ---
+        st.subheader("Win Probability Percentage")
+        results_df = pd.DataFrame.from_dict(results, orient="index", columns=["wins"])
+        results_df["probability"] = results_df["wins"] / n_sims
+        results_df = results_df.sort_values("probability", ascending=False)
+        c1, c2 = st.columns([3, 2])
+        with c1:
+            st.bar_chart(results_df.head(10)["probability"])
+        with c2:
+            st.dataframe(
+                results_df.head(12).assign(
+                    probability=lambda d: (d["probability"] * 100).round(1)
+                )[["probability"]].rename(columns={"probability": "Win %"}),
+                use_container_width=True,
+            )
 
-if prog_df is not None and team in prog_df.index:
-    st.markdown(
-        f'<div style="display:flex; align-items:center; gap:10px;">'
-        f'<img src="{get_flag(team)}" width="40">'
-        f'<h3 style="margin:0;">{team}</h3></div>',
-        unsafe_allow_html=True
-    )
-    st.bar_chart(prog_df.loc[team])
-else:
-    st.info("Run a simulation to see team progression probabilities.")
+        st.divider()
+
+        # --- Progression detail ---
+        st.subheader("Tournament Progression")
+        st.caption("Share of simulations in which each team reaches a given stage.")
+        prog_df = pd.DataFrame(progression).T.div(n_sims)
+        sort_col = "Winner" if "Winner" in prog_df.columns else prog_df.columns[-1]
+        st.dataframe(
+            (prog_df.sort_values(sort_col, ascending=False).head(20) * 100).round(1),
+            use_container_width=True,
+        )
+
+# --- TAB 3: TEAM EXPLORER ---
+with tab_team:
+    st.subheader("Team Explorer")
+    team = st.selectbox("Select a team", teams, key="team_view")
+
+    prog_df = None
+    if "progression" in st.session_state:
+        prog_df = pd.DataFrame(st.session_state["progression"]).T.div(st.session_state["n_sims"])
+
+    if prog_df is not None and team in prog_df.index:
+        st.markdown(
+            f'<div style="display:flex; align-items:center; gap:10px; margin:4px 0 8px;">'
+            f'<img src="{get_flag(team)}" width="40">'
+            f'<h3 style="margin:0;">{team}</h3></div>',
+            unsafe_allow_html=True,
+        )
+        st.caption("How far this team goes, across all simulations.")
+        st.bar_chart(prog_df.loc[team])
+    else:
+        st.info("Run a simulation first (sidebar → ▶ Run Simulation) to see how far each team goes.")
