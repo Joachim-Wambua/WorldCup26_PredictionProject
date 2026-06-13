@@ -60,6 +60,31 @@ _ROUND_LABELS = {
     "SF": "Semi-finals",
 }
 
+# 3-letter broadcast codes keep the side columns narrow so the whole bracket
+# fits on screen without horizontal scrolling. Full names are kept in the
+# Final, the champion card, and as hover tooltips on every cell.
+TEAM_CODES = {
+    "Mexico": "MEX", "South Africa": "RSA", "South Korea": "KOR", "Czechia": "CZE",
+    "Canada": "CAN", "Bosnia and Herzegovina": "BIH", "Qatar": "QAT", "Switzerland": "SUI",
+    "Brazil": "BRA", "Morocco": "MAR", "Haiti": "HAI", "Scotland": "SCO",
+    "USA": "USA", "Paraguay": "PAR", "Australia": "AUS", "Türkiye": "TUR",
+    "Germany": "GER", "Curacao": "CUW", "Ivory Coast": "CIV", "Ecuador": "ECU",
+    "Netherlands": "NED", "Japan": "JPN", "Sweden": "SWE", "Tunisia": "TUN",
+    "Belgium": "BEL", "Egypt": "EGY", "Iran": "IRN", "New Zealand": "NZL",
+    "Spain": "ESP", "Cape Verde": "CPV", "Saudi Arabia": "KSA", "Uruguay": "URU",
+    "France": "FRA", "Senegal": "SEN", "Iraq": "IRQ", "Norway": "NOR",
+    "Argentina": "ARG", "Algeria": "ALG", "Austria": "AUT", "Jordan": "JOR",
+    "Portugal": "POR", "Congo DR": "COD", "Uzbekistan": "UZB", "Colombia": "COL",
+    "England": "ENG", "Croatia": "CRO", "Ghana": "GHA", "Panama": "PAN",
+}
+
+
+def abbrev(team):
+    """Short broadcast code for a team; falls back to first 3 letters."""
+    if not team:
+        return "TBD"
+    return TEAM_CODES.get(team) or "".join(c for c in team if c.isalpha())[:3].upper()
+
 # ---------------------------------------------------------------------------
 # THEME — WC26 broadcast: navy stadium backdrop, FIFA-red card spine,
 # gold for winners / connectors / the Final.
@@ -71,18 +96,21 @@ _BRACKET_CSS = """
     radial-gradient(1100px 540px at 50% -10%, #17345F 0%, #0B1F3A 52%, #071228 100%);
   border:1px solid rgba(245,197,24,.16);
   border-radius:18px;
-  padding:18px 14px 26px;
+  padding:16px 12px 22px;
   overflow-x:auto;
 }
 .bk-head{text-align:center;margin-bottom:4px;}
 .bk-kicker{color:#F5C518;font-size:11px;letter-spacing:.32em;text-transform:uppercase;}
-.bk-head h3{color:#fff;margin:2px 0 12px;font-size:22px;letter-spacing:.02em;}
+.bk-head h3{color:#fff;margin:2px 0 10px;font-size:20px;letter-spacing:.02em;}
 
-.bk-container{display:flex;min-width:1500px;height:740px;}
-.bk-side{display:flex;flex:1;}
+/* Fit the available width: columns share space and shrink instead of forcing
+   a 1500px canvas. A modest min-width keeps it usable on small screens
+   (horizontal scroll only kicks in below that). */
+.bk-container{display:flex;width:100%;min-width:900px;height:600px;}
+.bk-side{display:flex;flex:1;min-width:0;}
 .bk-right{flex-direction:row-reverse;}
 
-.bk-round{flex:1;display:flex;flex-direction:column;min-width:168px;}
+.bk-round{flex:1;min-width:0;display:flex;flex-direction:column;}
 .bk-round-title{
   text-align:center;color:rgba(245,197,24,.85);
   font-size:10px;letter-spacing:.28em;text-transform:uppercase;
@@ -95,7 +123,7 @@ _BRACKET_CSS = """
    between them and the pair's midpoint feeds the next round. */
 .bk-pair{
   flex:1;display:flex;flex-direction:column;justify-content:space-around;
-  position:relative;margin:0 22px;
+  position:relative;margin:0 14px;
 }
 .bk-solo{justify-content:center;}
 .bk-mw{position:relative;}
@@ -105,51 +133,51 @@ _BRACKET_CSS = """
   background:rgba(13,23,42,.92);
   border:1px solid rgba(255,255,255,.09);
   border-left:3px solid #E10600;
-  border-radius:10px;
-  padding:5px 8px;
-  box-shadow:0 8px 18px rgba(0,0,0,.38);
+  border-radius:9px;
+  padding:4px 7px;
+  box-shadow:0 6px 14px rgba(0,0,0,.36);
 }
 .bk-right .bk-match{
   border-left:1px solid rgba(255,255,255,.09);
   border-right:3px solid #E10600;
 }
 .bk-team{
-  display:flex;align-items:center;gap:8px;
-  padding:3px 2px;color:#cbd5e1;font-size:13px;line-height:1.25;
-  opacity:.6;white-space:nowrap;
+  display:flex;align-items:center;gap:7px;
+  padding:2px 1px;color:#cbd5e1;font-size:12px;line-height:1.2;
+  opacity:.62;white-space:nowrap;
 }
 .bk-right .bk-team{flex-direction:row-reverse;}
 .bk-team img{
-  width:22px;height:15px;object-fit:cover;border-radius:2px;
+  width:20px;height:13px;object-fit:cover;border-radius:2px;
   box-shadow:0 0 0 1px rgba(255,255,255,.18);flex:0 0 auto;
 }
-.bk-team span{overflow:hidden;text-overflow:ellipsis;}
+.bk-team .bk-code{font-weight:600;letter-spacing:.04em;}
 .bk-win{opacity:1;color:#F5C518;font-weight:700;}
 
 /* connectors — gold, only between the two feeder matches */
 .bk-left .bk-duo::after{
-  content:"";position:absolute;right:-12px;top:25%;bottom:25%;
+  content:"";position:absolute;right:-14px;top:25%;bottom:25%;
   width:2px;background:rgba(245,197,24,.4);
 }
 .bk-left .bk-duo .bk-mw::after{
-  content:"";position:absolute;right:-12px;top:50%;
-  width:12px;height:2px;background:rgba(245,197,24,.4);
+  content:"";position:absolute;right:-14px;top:50%;
+  width:14px;height:2px;background:rgba(245,197,24,.4);
 }
 .bk-left .bk-pair::before{
-  content:"";position:absolute;right:-44px;top:50%;
-  width:32px;height:2px;background:rgba(245,197,24,.4);
+  content:"";position:absolute;right:-28px;top:50%;
+  width:14px;height:2px;background:rgba(245,197,24,.4);
 }
 .bk-right .bk-duo::after{
-  content:"";position:absolute;left:-12px;top:25%;bottom:25%;
+  content:"";position:absolute;left:-14px;top:25%;bottom:25%;
   width:2px;background:rgba(245,197,24,.4);
 }
 .bk-right .bk-duo .bk-mw::after{
-  content:"";position:absolute;left:-12px;top:50%;
-  width:12px;height:2px;background:rgba(245,197,24,.4);
+  content:"";position:absolute;left:-14px;top:50%;
+  width:14px;height:2px;background:rgba(245,197,24,.4);
 }
 .bk-right .bk-pair::before{
-  content:"";position:absolute;left:-44px;top:50%;
-  width:32px;height:2px;background:rgba(245,197,24,.4);
+  content:"";position:absolute;left:-28px;top:50%;
+  width:14px;height:2px;background:rgba(245,197,24,.4);
 }
 
 /* the Final — centre column, gold glow, trophy, champion */
@@ -164,7 +192,7 @@ _BRACKET_CSS = """
   border:1px solid rgba(245,197,24,.55);
   box-shadow:0 0 26px rgba(245,197,24,.22);
 }
-.bk-final .bk-team{font-size:15px;justify-content:center;}
+.bk-final .bk-team{font-size:14px;justify-content:center;white-space:normal;text-align:center;}
 .bk-champ{margin-top:8px;text-align:center;color:#fff;}
 .bk-champ img{width:44px;border-radius:4px;box-shadow:0 0 0 1px rgba(255,255,255,.25);}
 .bk-champ-name{margin-top:4px;font-weight:700;color:#F5C518;letter-spacing:.04em;}
@@ -230,21 +258,27 @@ def _chunk_pairs(items):
 # ---------------------------------------------------------------------------
 # html builders (single-line strings — indented HTML trips up st.markdown)
 # ---------------------------------------------------------------------------
-def _team_html(team, get_flag, is_winner):
+def _team_html(team, get_flag, is_winner, full=False):
     cls = "bk-team bk-win" if is_winner else "bk-team"
     flag = get_flag(team) if team else ""
-    name = team or "TBD"
-    return f'<div class="{cls}"><img src="{flag}" alt=""><span>{name}</span></div>'
+    label = (team or "TBD") if full else abbrev(team)
+    title = team or "TBD"
+    return (
+        f'<div class="{cls}" title="{title}">'
+        f'<img src="{flag}" alt="">'
+        f'<span class="bk-code">{label}</span>'
+        f'</div>'
+    )
 
 
-def _match_html(match, get_flag, round_winners):
+def _match_html(match, get_flag, round_winners, full=False):
     t1, t2, explicit = _normalize(match)
     def won(t):
         return t is not None and (t == explicit or t in round_winners)
     return (
         '<div class="bk-match">'
-        + _team_html(t1, get_flag, won(t1))
-        + _team_html(t2, get_flag, won(t2))
+        + _team_html(t1, get_flag, won(t1), full)
+        + _team_html(t2, get_flag, won(t2), full)
         + "</div>"
     )
 
@@ -273,7 +307,7 @@ def _final_html(bracket, get_flag, winners_by_round, champion):
         '<div class="bk-final-label">Final</div>'
     )
     if finals:
-        html += _match_html(finals[0], get_flag, winners_by_round.get("Final", set()))
+        html += _match_html(finals[0], get_flag, winners_by_round.get("Final", set()), full=True)
     if champion:
         html += (
             '<div class="bk-champ">'

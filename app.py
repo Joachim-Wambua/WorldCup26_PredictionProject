@@ -20,9 +20,15 @@ def resolve_path(relpath):
     return relpath
 
 
-from src.models.poisson import train_model, get_lambda
+from src.models.poisson import train_model, get_lambda, score_matrix, DEFAULT_RHO
 from src.models.hybrid import HybridWorldCupModel
-from simulation import run_simulations, world_cup_2026_groups, build_match_prob_cache
+from simulation import (
+    run_simulations,
+    world_cup_2026_groups,
+    build_match_prob_cache,
+    resolve_venue,
+    HOST_NATIONS,
+)
 from knockout_bracket import render_broadcast_bracket
 
 # ---------------------------
@@ -114,9 +120,7 @@ def get_flag(team):
 st.markdown("""
 <style>
 /* Group cards: colours are pinned explicitly so the dark card stays
-   readable regardless of the Streamlit theme (light OR dark). Previously
-   text colour was inherited, so on a light/bright theme you got dark text
-   on a dark card. */
+   readable regardless of the Streamlit theme (light OR dark). */
 .group-card {
     background: linear-gradient(160deg, #0d2143 0%, #0b1424 100%);
     border: 1px solid rgba(245,197,24,0.16);
@@ -125,78 +129,91 @@ st.markdown("""
     margin-bottom: 18px;
     box-shadow: 0 6px 18px rgba(0,0,0,0.30);
 }
-
 .group-title {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: #F5C518;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.2em;
+    text-transform: uppercase; color: #F5C518;
+    margin-bottom: 10px; padding-bottom: 8px;
     border-bottom: 1px solid rgba(255,255,255,0.10);
 }
-
 .team-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 7px 8px;
-    border-radius: 8px;
-    margin-bottom: 2px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 7px 8px; border-radius: 8px; margin-bottom: 2px;
 }
+.team-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.team-flag img {
+    width: 24px; height: 16px; object-fit: cover; border-radius: 3px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.20); display: block;
+}
+.team-name { font-size: 14px; line-height: 1.2; color: #f1f5f9; }
+.team-stats {
+    display: flex; gap: 14px; font-size: 13px; color: #9fb0c3;
+    flex: 0 0 auto; white-space: nowrap;
+}
+.team-stats b { color: #ffffff; font-weight: 700; }
+.qualify { background: rgba(22,163,74,0.14); box-shadow: inset 3px 0 0 #16a34a; }
+.qualify .team-name { color: #ffffff; font-weight: 600; }
+.qualify .team-stats b { color: #86efac; }
 
-.team-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+/* ---- Match Predictor card ---- */
+.pred-card {
+    background: radial-gradient(900px 320px at 50% -40%, #17345F 0%, #0c1f3c 55%, #081326 100%);
+    border: 1px solid rgba(245,197,24,0.18);
+    border-radius: 18px; padding: 18px 22px 20px; color: #f8fafc;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.38);
+}
+.pred-venue {
+    text-align: center; font-size: 11px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: rgba(245,197,24,0.9); margin-bottom: 14px;
+}
+.pred-main {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+}
+.pred-side {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
     min-width: 0;
 }
-
-.team-flag img {
-    width: 24px;
-    height: 16px;
-    object-fit: cover;
-    border-radius: 3px;
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.20);
-    display: block;
+.pred-side img {
+    width: 58px; height: 39px; object-fit: cover; border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.25);
 }
-
-.team-name {
-    font-size: 14px;
-    line-height: 1.2;
-    color: #f1f5f9;
+.pred-tname { font-size: 15px; font-weight: 600; text-align: center; }
+.pred-xg { font-size: 12px; color: #93a4ba; }
+.pred-center { flex: 0 0 auto; text-align: center; padding: 0 6px; }
+.pred-scoreline { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: 0.02em; }
+.pred-scoreline span { color: rgba(245,197,24,0.8); padding: 0 6px; }
+.pred-scoreprob { font-size: 11px; color: #93a4ba; margin-top: 6px;
+    text-transform: uppercase; letter-spacing: 0.12em; }
+.pred-bar {
+    display: flex; height: 26px; border-radius: 8px; overflow: hidden;
+    margin: 18px 0 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
 }
-
-.team-stats {
-    display: flex;
-    gap: 14px;
-    font-size: 13px;
-    color: #9fb0c3;
-    flex: 0 0 auto;
-    white-space: nowrap;
+.pred-bar .seg {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #0b1424; white-space: nowrap;
 }
-
-.team-stats b {
-    color: #ffffff;
-    font-weight: 700;
+.pred-bar .seg1 { background: #38bdf8; }
+.pred-bar .segd { background: #94a3b8; }
+.pred-bar .seg2 { background: #fb7185; }
+.pred-legend {
+    display: flex; justify-content: center; gap: 18px; font-size: 12px; color: #cbd5e1;
 }
-
-/* Top-two qualifiers: green spine + brighter text */
-.qualify {
-    background: rgba(22,163,74,0.14);
-    box-shadow: inset 3px 0 0 #16a34a;
+.pred-legend .dot { display: inline-block; width: 9px; height: 9px;
+    border-radius: 50%; margin-right: 6px; }
+.pred-legend .d1 { background: #38bdf8; }
+.pred-legend .dd { background: #94a3b8; }
+.pred-legend .d2 { background: #fb7185; }
+.pred-alts {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    justify-content: center; margin-top: 16px;
 }
-
-.qualify .team-name {
-    color: #ffffff;
-    font-weight: 600;
+.pred-alts .alt-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: #7e90a6;
 }
-
-.qualify .team-stats b {
-    color: #86efac;
+.pred-chip {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 999px; padding: 4px 11px; font-size: 12px; color: #e2e8f0;
 }
+.pred-chip b { color: #F5C518; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -204,55 +221,12 @@ st.markdown(f"""
 <style>
 .hero {{
     background: linear-gradient(135deg, {PRIMARY}, #1C3D73);
-    padding: 30px;
-    border-radius: 16px;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    padding: 30px; border-radius: 16px; color: white;
+    display: flex; align-items: center; justify-content: space-between;
 }}
-
-.hero-text h1 {{
-    font-size: 40px;
-    margin-bottom: 5px;
-}}
-
-.hero-text p {{
-    opacity: 0.85;
-    font-size: 16px;
-}}
-
-.hero img {{
-    height: 80px;
-}}
-
-.match-card {{
-    background: {CARD};
-    padding: 20px;
-    border-radius: 14px;
-    text-align: center;
-    color: white;
-}}
-
-.match-card .mc-row {{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}}
-
-.match-card .mc-team {{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 6px;
-    font-size: 14px;
-}}
-
-.match-card .mc-team img {{
-    width: 54px;
-    border-radius: 4px;
-}}
+.hero-text h1 {{ font-size: 40px; margin-bottom: 5px; }}
+.hero-text p {{ opacity: 0.85; font-size: 16px; }}
+.hero img {{ height: 80px; }}
 </style>
 
 <div class="hero">
@@ -273,9 +247,6 @@ def load_data():
     df = pd.read_csv(resolve_path("data/processed/matches_with_features.csv"))
     final_elo = pd.read_csv(resolve_path("data/processed/final_elo.csv"))
     return df, final_elo
-
-
-np.random.seed(42)
 
 
 @st.cache_resource
@@ -301,7 +272,6 @@ df, final_elo = load_data()
 
 elo_dict = dict(zip(final_elo["team"], final_elo["elo"]))
 
-# Single source of truth for the team list (was previously defined twice)
 teams = sorted({
     team
     for group in world_cup_2026_groups.values()
@@ -315,48 +285,36 @@ prob_cache = load_prob_cache(model, tuple(teams))
 beta_home, beta_away = get_poisson_params(df)
 
 
-# SHOW WORLD CUP 26 GROUP STAGES
+# ---------------------------
+# GROUP STAGE CARD
+# ---------------------------
 def render_group_card(group_name, standings):
     rows = []
 
     if isinstance(standings, dict):
         for team, stats in standings.items():
-            rows.append({
-                "team": team,
-                "points": stats.get("points", 0),
-                "gd": stats.get("gd", 0),
-                "goals": stats.get("goals", 0),
-            })
+            rows.append({"team": team, "points": stats.get("points", 0),
+                         "gd": stats.get("gd", 0), "goals": stats.get("goals", 0)})
     else:
         for item in standings:
             team, stats = item if isinstance(item, tuple) else (item["team"], item)
-            rows.append({
-                "team": team,
-                "points": stats.get("points", 0),
-                "gd": stats.get("gd", 0),
-                "goals": stats.get("goals", 0),
-            })
+            rows.append({"team": team, "points": stats.get("points", 0),
+                         "gd": stats.get("gd", 0), "goals": stats.get("goals", 0)})
 
     table = pd.DataFrame(rows)
     table = table.sort_values(["points", "gd", "goals"], ascending=False).reset_index(drop=True)
 
     def fmt_gd(value):
-        # Show an explicit +/- on goal difference; fall back to str if non-numeric
         try:
             return f"{int(value):+d}"
         except (ValueError, TypeError):
             return str(value)
 
-    # Build rows as ONE blank-line-free string. Blank lines inside an HTML
-    # block make Streamlit's markdown parser close the block early and drop
-    # the styling wrapper, which made some cards render on the bare page.
     rows_html = ""
-
     for i, row in table.iterrows():
         team = row["team"]
         flag = get_flag(team)
         qualify_class = "team-row qualify" if i < 2 else "team-row"
-
         rows_html += (
             f'<div class="{qualify_class}">'
             f'<div class="team-left">'
@@ -377,45 +335,98 @@ def render_group_card(group_name, standings):
         f'{rows_html}'
         f'</div>'
     )
-
     st.markdown(card_html, unsafe_allow_html=True)
 
 
+# ---------------------------
+# MATCH PREDICTOR HELPERS
+# ---------------------------
+def venue_aware_lambdas(team1, team2):
+    """Expected goals for team1, team2 with WC venue rules.
+
+    Neutral by default; the venue advantage is only applied when a host
+    (USA / Mexico / Canada) is involved, and it attaches to the host
+    regardless of which slot it sits in.
+    """
+    neutral, home = resolve_venue(team1, team2)
+    if neutral:
+        l1, l2 = get_lambda(team1, team2, elo_dict, model.beta_home, model.beta_away, neutral=True)
+    elif home == team1:
+        l1, l2 = get_lambda(team1, team2, elo_dict, model.beta_home, model.beta_away, neutral=False)
+    else:
+        l2, l1 = get_lambda(team2, team1, elo_dict, model.beta_home, model.beta_away, neutral=False)
+    return l1, l2, neutral, home
+
+
+def outcome_probs(team1, team2):
+    """[team1 win, draw, team2 win] — reuse the SAME cache the tournament uses
+    so the predictor and the simulation never disagree."""
+    p = prob_cache.get((team1, team2))
+    if p is None:
+        neutral, home = resolve_venue(team1, team2)
+        pr = model.predict(team1, team2, neutral=neutral)
+        p = np.array([pr["home_win"], pr["draw"], pr["away_win"]])
+    return np.asarray(p, dtype=float)
+
+
+def scoreline_matrix(l1, l2, max_goals=6):
+    # Dixon-Coles corrected joint scoreline (more realistic low scores / draws
+    # than independent Poisson). DEFAULT_RHO is a sensible default; for a
+    # data-driven value, run poisson.fit_rho() on your training set.
+    return score_matrix(l1, l2, rho=DEFAULT_RHO, max_goals=max_goals)
+
+
+def top_scorelines(M, k=3):
+    flat = M.flatten()
+    idx = np.argsort(flat)[::-1][:k]
+    out = []
+    for f in idx:
+        gi, gj = divmod(int(f), M.shape[1])
+        out.append((gi, gj, float(M[gi, gj])))
+    return out
+
+
+def coherent_score(M, outcome):
+    """Most likely exact score consistent with the favoured outcome
+    ('home' | 'draw' | 'away'), so the predicted score never contradicts
+    the win bar."""
+    n = M.shape[0]
+    best, best_p = (1, 1), -1.0
+    for i in range(n):
+        for j in range(n):
+            if outcome == "home" and not i > j:
+                continue
+            if outcome == "draw" and not i == j:
+                continue
+            if outcome == "away" and not i < j:
+                continue
+            if M[i, j] > best_p:
+                best_p, best = M[i, j], (i, j)
+    return best, best_p
+
+
+def pct_round(values):
+    """Round a probability vector to ints summing to exactly 100 (largest remainder)."""
+    raw = [v * 100 for v in values]
+    floors = [int(np.floor(x)) for x in raw]
+    remainder = 100 - sum(floors)
+    order = sorted(range(len(raw)), key=lambda k: raw[k] - floors[k], reverse=True)
+    for k in range(remainder):
+        floors[order[k]] += 1
+    return floors
+
+
 # =========================================================
-# SECTION 1: HYBRID MATCH PREDICTOR
+# SECTION 1: MATCH PREDICTOR
 # =========================================================
 st.markdown("## World Cup 2026 Match Predictor")
 
 col1, col2 = st.columns(2)
-
 with col1:
-    team1 = st.selectbox("Home Team", teams, key="t1")
-
+    team1 = st.selectbox("Team 1", teams, key="t1")
 with col2:
-    # Default the away team to a different side so the app doesn't open
-    # predicting a team against itself.
     away_default = 1 if len(teams) > 1 else 0
-    team2 = st.selectbox("Away Team", teams, index=away_default, key="t2")
-
-
-# --- MATCH CARD UI ---
-st.markdown(f"""
-<div class="match-card">
-<div class="mc-row">
-    <div class="mc-team">
-        <img src="{get_flag(team1)}">
-        <p>{team1}</p>
-    </div>
-    <div>
-        <h2>VS</h2>
-    </div>
-    <div class="mc-team">
-        <img src="{get_flag(team2)}">
-        <p>{team2}</p>
-    </div>
-</div>
-</div>
-""", unsafe_allow_html=True)
+    team2 = st.selectbox("Team 2", teams, index=away_default, key="t2")
 
 if model is None:
     st.error("Hybrid model not loaded")
@@ -424,58 +435,71 @@ if model is None:
 if team1 == team2:
     st.warning("Pick two different teams to predict a match.")
 else:
-    # --- Expected Goals (Poisson layer insight) ---
-    lam_home, lam_away = get_lambda(
-        team1,
-        team2,
-        elo_dict,
-        model.beta_home,
-        model.beta_away
+    # --- compute everything (cheap, so no button needed) ---
+    l1, l2, neutral, home = venue_aware_lambdas(team1, team2)
+    p1, pdraw, p2 = outcome_probs(team1, team2)
+
+    M = scoreline_matrix(l1, l2)
+    outcome = ["home", "draw", "away"][int(np.argmax([p1, pdraw, p2]))]
+    (gs1, gs2), score_p = coherent_score(M, outcome)
+    alts = top_scorelines(M, 3)
+
+    ph, pd_, pa = pct_round([p1, pdraw, p2])
+
+    if neutral:
+        venue_label = "Neutral venue"
+    else:
+        venue_label = f"{home} at home · host advantage applied"
+
+    def seg(width, cls):
+        # hide the % label on very thin segments to avoid overflow
+        label = f"{width}%" if width >= 8 else ""
+        return f'<div class="seg {cls}" style="width:{width}%">{label}</div>'
+
+    chips = "".join(
+        f'<span class="pred-chip">{a}&ndash;{b} <b>{p:.0%}</b></span>' for a, b, p in alts
     )
 
-    colA, colB = st.columns(2)
+    card = (
+        '<div class="pred-card">'
+        f'<div class="pred-venue">{venue_label}</div>'
+        '<div class="pred-main">'
+        f'<div class="pred-side"><img src="{get_flag(team1)}">'
+        f'<div class="pred-tname">{team1}</div><div class="pred-xg">{l1:.2f} xG</div></div>'
+        '<div class="pred-center">'
+        f'<div class="pred-scoreline">{gs1}<span>&ndash;</span>{gs2}</div>'
+        f'<div class="pred-scoreprob">predicted score · {score_p:.0%} likely</div>'
+        '</div>'
+        f'<div class="pred-side"><img src="{get_flag(team2)}">'
+        f'<div class="pred-tname">{team2}</div><div class="pred-xg">{l2:.2f} xG</div></div>'
+        '</div>'
+        '<div class="pred-bar">'
+        f'{seg(ph, "seg1")}{seg(pd_, "segd")}{seg(pa, "seg2")}'
+        '</div>'
+        '<div class="pred-legend">'
+        f'<span><i class="dot d1"></i>{team1} win</span>'
+        '<span><i class="dot dd"></i>Draw</span>'
+        f'<span><i class="dot d2"></i>{team2} win</span>'
+        '</div>'
+        '<div class="pred-alts">'
+        '<span class="alt-label">Other likely scores</span>'
+        f'{chips}'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(card, unsafe_allow_html=True)
 
-    with colA:
-        st.metric(team1, f"{lam_home:.2f} xG")
+    labels = {"home": f"{team1} to win", "draw": "Draw", "away": f"{team2} to win"}
+    conf = max(ph, pd_, pa)
+    st.caption(f"Most likely outcome: **{labels[outcome]}** ({conf}%) — predicted score {gs1}-{gs2}.")
 
-    with colB:
-        st.metric(team2, f"{lam_away:.2f} xG")
-
-    # --- Hybrid prediction ---
-    if st.button("Predict Match"):
-        probs = model.predict(team1, team2)
-
-        # Map Labels to Team Names
-        display_probs = {
-            f"{team1} win": probs["home_win"],
-            "Draw": probs["draw"],
-            f"{team2} win": probs["away_win"]
-        }
-
-        st.subheader("Match Outcome Probabilities")
-
-        prob_df = pd.DataFrame.from_dict(
-            display_probs,
-            orient="index",
-            columns=["probability"]
-        )
-
-        prob_df = prob_df.sort_values("probability", ascending=False)
-
-        st.bar_chart(prob_df)
-
-        winner = max(display_probs, key=display_probs.get)
-
-        st.success(f"Most likely outcome: {winner} ({display_probs[winner]:.1%})")
 
 # =========================================================
 # SECTION 2: TOURNAMENT SIMULATION
 # =========================================================
 with st.sidebar:
     st.header("Simulation Controls")
-
     n_sims = st.slider("Slide to Select Number of Simulations", 100, 10000, 1000, step=100)
-
     run = st.button("Run Simulation")
 
 # ---------------------------
@@ -483,7 +507,6 @@ with st.sidebar:
 # ---------------------------
 if run:
     with st.spinner("Simulating World Cup 2026..."):
-
         results, progression, group_results, bracket = run_simulations(
             n_sims,
             world_cup_2026_groups,
@@ -493,7 +516,6 @@ if run:
             beta_away
         )
 
-    # STORE EVERYTHING
     st.session_state["results"] = results
     st.session_state["progression"] = progression
     st.session_state["n_sims"] = n_sims
@@ -502,9 +524,32 @@ if run:
 
     st.success("Simulation complete!")
 
+# ---------------------------
+# GROUP STAGE
+# ---------------------------
+if "group_results" in st.session_state:
+
+    st.subheader("Group Stage Standings")
+    group_results = st.session_state["group_results"]
+    cols = st.columns(4)
+    for i, (group, standings) in enumerate(group_results.items()):
+        with cols[i % 4]:
+            render_group_card(group, standings)
+
 
 # ---------------------------
-# DISPLAY RESULTS (ALWAYS IF AVAILABLE)
+# KNOCKOUT BRACKET
+# ---------------------------
+if "bracket" in st.session_state:
+
+    st.subheader("Knockout Bracket")
+    results = st.session_state["results"]
+    champion = max(results, key=results.get)
+    render_broadcast_bracket(st.session_state["bracket"], get_flag, champion=champion)
+
+
+# ---------------------------
+# WINNER PROBABILITIES + PROGRESSION
 # ---------------------------
 if "results" in st.session_state:
 
@@ -512,97 +557,41 @@ if "results" in st.session_state:
     progression = st.session_state["progression"]
     n_sims = st.session_state["n_sims"]
 
-    # ---------------------------
-    # WINNER PROBABILITIES
-    # ---------------------------
-    results_df = pd.DataFrame.from_dict(
-        results,
-        orient="index",
-        columns=["wins"]
-    )
-
+    results_df = pd.DataFrame.from_dict(results, orient="index", columns=["wins"])
     results_df["probability"] = results_df["wins"] / n_sims
     results_df = results_df.sort_values("probability", ascending=False)
 
     st.subheader("Winner Probabilities")
-
     st.bar_chart(results_df.head(10)["probability"])
     st.dataframe(results_df.head(20))
 
-    # ---------------------------
-    # PROGRESSION
-    # ---------------------------
-    st.subheader("📊 Tournament Progression")
-
+    st.subheader("Tournament Progression")
     prog_df = pd.DataFrame(progression).T
     prog_df = prog_df.div(n_sims)
-
-    # Guard: don't crash if the "Winner" column is missing from a partial run
     sort_col = "Winner" if "Winner" in prog_df.columns else prog_df.columns[-1]
-
-    st.dataframe(
-        prog_df.sort_values(sort_col, ascending=False).head(20)
-    )
-
-
-# ---------------------------
-# DISPLAY GROUP STAGE
-# ---------------------------
-if "group_results" in st.session_state:
-
-    st.subheader("Group Stage Standings")
-
-    group_results = st.session_state["group_results"]
-
-    cols = st.columns(4)
-
-    for i, (group, standings) in enumerate(group_results.items()):
-        with cols[i % 4]:
-            render_group_card(group, standings)
-
-
-# ---------------------------
-# DISPLAY KNOCKOUT BRACKET
-# ---------------------------
-if "bracket" in st.session_state:
-    st.subheader("Knockout Bracket")
-
-    results = st.session_state["results"]
-    champion = max(results, key=results.get)
-
-    render_broadcast_bracket(
-        st.session_state["bracket"],
-        get_flag,
-        champion=champion,
-    )
+    st.dataframe(prog_df.sort_values(sort_col, ascending=False).head(20))
 
 
 # =========================================================
-# 🔎 SECTION 3: TEAM EXPLORER
+# SECTION 3: TEAM EXPLORER
 # =========================================================
 st.header("Team Explorer")
 
 team = st.selectbox("Select Team", teams, key="team_view")
 
 prog_df = None
-
 if "progression" in st.session_state:
-
     n_sims = st.session_state["n_sims"]
-
     prog_df = pd.DataFrame(st.session_state["progression"]).T
     prog_df = prog_df.div(n_sims)
 
-
 if prog_df is not None and team in prog_df.index:
-
-    st.markdown(f"""
-        <div style="display:flex; align-items:center; gap:10px;">
-            <img src="{get_flag(team)}" width="40">
-            <h3 style="margin:0;">{team}</h3>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display:flex; align-items:center; gap:10px;">'
+        f'<img src="{get_flag(team)}" width="40">'
+        f'<h3 style="margin:0;">{team}</h3></div>',
+        unsafe_allow_html=True
+    )
     st.bar_chart(prog_df.loc[team])
-
 else:
     st.info("Run a simulation to see team progression probabilities.")
