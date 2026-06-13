@@ -46,6 +46,12 @@ Then delete from app.py:
 
 import streamlit as st
 
+# Official WC26 mark (same asset the hero uses) — shown above the Final.
+WC_LOGO_URL = (
+    "https://assets.football-logos.cc/logos/tournaments/700x700/"
+    "fifa-world-cup-2026--white.9ba8a004.png"
+)
+
 _SIDE_ROUNDS = ["R32", "R16", "QF", "SF"]
 _ROUND_LABELS = {
     "R32": "Round of 32",
@@ -151,7 +157,7 @@ _BRACKET_CSS = """
   width:240px;display:flex;flex-direction:column;
   justify-content:center;align-items:center;gap:8px;padding:0 6px;
 }
-.bk-trophy{font-size:38px;filter:drop-shadow(0 0 14px rgba(245,197,24,.55));}
+.bk-trophy{height:54px;width:auto;filter:drop-shadow(0 0 14px rgba(245,197,24,.55));}
 .bk-final-label{color:#F5C518;font-size:11px;letter-spacing:.34em;text-transform:uppercase;}
 .bk-final .bk-match{
   width:100%;
@@ -261,7 +267,11 @@ def _side_html(side_matches, get_flag, winners_by_round, side):
 
 def _final_html(bracket, get_flag, winners_by_round, champion):
     finals = _matches_of(bracket, "Final")
-    html = '<div class="bk-final"><div class="bk-trophy">🏆</div><div class="bk-final-label">Final</div>'
+    html = (
+        '<div class="bk-final">'
+        f'<img class="bk-trophy" src="{WC_LOGO_URL}" alt="World Cup 2026">'
+        '<div class="bk-final-label">Final</div>'
+    )
     if finals:
         html += _match_html(finals[0], get_flag, winners_by_round.get("Final", set()))
     if champion:
