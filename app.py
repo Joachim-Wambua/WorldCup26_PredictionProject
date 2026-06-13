@@ -508,9 +508,18 @@ with tab_predict:
 with tab_sim:
     if "results" not in st.session_state:
         st.info(
-            "Set the number of simulations in the sidebar on the left, then click "
+            "Set the number of simulations in the sidebar on the left or below, then click "
             "**▶ Run Simulation** to generate a knockout bracket, group tables, and title odds."
         )
+
+        st.markdown("### Simulation Controls")
+        n_sims = st.slider(
+            "Number of simulations", 100, 5000, 1000, step=100,
+            help="More runs = smoother odds. 1,000 is plenty for a quick look; "
+                "5,000 for stable probabilities.",
+        )
+        run = st.button("▶  Run Simulation", use_container_width=True, type="primary")
+        st.caption("Each run plays out the whole tournament thousands of times.")
     else:
         results = st.session_state["results"]
         progression = st.session_state["progression"]
