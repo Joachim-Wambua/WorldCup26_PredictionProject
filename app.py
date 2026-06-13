@@ -499,7 +499,7 @@ else:
 # =========================================================
 with st.sidebar:
     st.header("Simulation Controls")
-    n_sims = st.slider("Slide to Select Number of Simulations", 100, 10000, 1000, step=100)
+    n_sims = st.slider("Slide to Select Number of Simulations", 100, 5000, 1000, step=100)
     run = st.button("Run Simulation")
 
 # ---------------------------
@@ -524,6 +524,7 @@ if run:
 
     st.success("Simulation complete!")
 
+
 # ---------------------------
 # GROUP STAGE
 # ---------------------------
@@ -543,10 +544,23 @@ if "group_results" in st.session_state:
 if "bracket" in st.session_state:
 
     st.subheader("Knockout Bracket")
-    results = st.session_state["results"]
-    champion = max(results, key=results.get)
-    render_broadcast_bracket(st.session_state["bracket"], get_flag, champion=champion)
+    bracket = st.session_state["bracket"]
 
+    # Champion is taken from the displayed bracket itself, so the card can
+    # never contradict the Final shown above it.
+    final = bracket.get("Final", {})
+    champ_list = final.get("winners") or []
+    if champ_list:
+        champion = champ_list[0]
+    else:
+        champion = max(st.session_state["results"], key=st.session_state["results"].get)
+
+    render_broadcast_bracket(bracket, get_flag, champion=champion)
+    st.caption(
+        "One representative tournament won by the most likely champion — "
+        "a single plausible path, not the full forecast. "
+        "See **Winner Probabilities** below for the model's actual odds."
+    )
 
 # ---------------------------
 # WINNER PROBABILITIES + PROGRESSION

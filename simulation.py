@@ -120,15 +120,80 @@ def build_match_prob_cache(teams, model, save_path="models/prob_cache.pkl"):
     return cache
 
 
+# ===========================================================================
+# OPTIMIZED SIMULATION CORE
+#
+# Speed-ups vs the original:
+#  - np.random.choice (which validates its args on every call) is replaced by a
+#    single uniform draw compared against precomputed cumulative probabilities.
+#  - Per-pair Poisson lambdas + outcome CDFs are precomputed ONCE into a match
+#    cache, so get_lambda / exp / resolve_venue are not called inside the loop.
+#  - Knockout matches skip goal sampling (they only need a winner).
+#  - Progression is accumulated from per-stage team lists instead of building a
+#    full {team: {stage: 0}} dict every single tournament.
+# ===========================================================================
+
+# Module-level aliases avoid attribute lookups in the hot loop.
+_random = np.random.random
+_poisson = np.random.poisson
+
+
+def build_match_cache(teams, prob_cache, elo_dict, beta_home, beta_away):
+    """Precompute, for every ordered pair, the data the match sampler needs:
+        (cdf0, cdf1, lam1, lam2)
+    where cdf0 = P(team1 win), cdf1 = P(team1 win)+P(draw), and lam1/lam2 are the
+    venue-aware expected goals. Built once per run_simulations call."""
+    mc = {}
+    for t1 in teams:
+        for t2 in teams:
+            if t1 == t2:
+                continue
+            p = prob_cache.get((t1, t2))
+            if p is None:
+                continue
+            cdf0 = float(p[0])
+            cdf1 = float(p[0] + p[1])
+
+            neutral, home = resolve_venue(t1, t2)
+            if neutral:
+                lam1, lam2 = get_lambda(t1, t2, elo_dict, beta_home, beta_away, neutral=True)
+            elif home == t1:
+                lam1, lam2 = get_lambda(t1, t2, elo_dict, beta_home, beta_away, neutral=False)
+            else:
+                lam2, lam1 = get_lambda(t2, t1, elo_dict, beta_home, beta_away, neutral=False)
+
+            mc[(t1, t2)] = (cdf0, cdf1, float(lam1), float(lam2))
+    return mc
+
+
+def simulate_match_fast(t1, t2, mc, need_goals=True):
+    """Sample one match. Returns (result, g1, g2) where result is t1, t2, or 'draw'.
+    Goals are only sampled when need_goals (group stage); knockout skips them."""
+    cdf0, cdf1, lam1, lam2 = mc[(t1, t2)]
+    r = _random()
+
+    if not need_goals:
+        if r < cdf0:
+            return t1, 0, 0
+        elif r < cdf1:
+            return "draw", 0, 0
+        return t2, 0, 0
+
+    g1 = _poisson(lam1)
+    g2 = _poisson(lam2)
+    if r < cdf0:                       # team1 win
+        return t1, max(g1, g2 + 1), min(g1, g2)
+    elif r < cdf1:                     # draw
+        g = min(g1, g2)
+        return "draw", g, g
+    return t2, min(g1, g2), max(g1 + 1, g2)   # team2 win
+
+
+# Backwards-compatible wrapper (kept in case anything calls it directly).
 def simulate_match_hybrid(team1, team2, prob_cache, elo_dict=None, beta_home=None, beta_away=None):
-
     p = prob_cache[(team1, team2)]
-
-    outcome = np.random.choice(
-        ["home_win", "draw", "away_win"],
-        p=p
-    )
-
+    cdf0 = float(p[0]); cdf1 = float(p[0] + p[1])
+    r = _random()
     if elo_dict is not None:
         neutral, home = resolve_venue(team1, team2)
         if neutral:
@@ -136,42 +201,25 @@ def simulate_match_hybrid(team1, team2, prob_cache, elo_dict=None, beta_home=Non
         elif home == team1:
             lam1, lam2 = get_lambda(team1, team2, elo_dict, beta_home, beta_away, neutral=False)
         else:
-            # host is team2 -> give the venue boost to team2's rate
             lam2, lam1 = get_lambda(team2, team1, elo_dict, beta_home, beta_away, neutral=False)
-        g1 = np.random.poisson(lam1)
-        g2 = np.random.poisson(lam2)
+        g1 = _poisson(lam1); g2 = _poisson(lam2)
     else:
         g1, g2 = 1, 1
-
-    if outcome == "home_win":
+    if r < cdf0:
         return team1, max(g1, g2 + 1), min(g1, g2)
-    elif outcome == "away_win":
-        return team2, min(g1, g2), max(g1 + 1, g2)
-    else:
-        g = min(g1, g2)
-        return "draw", g, g
+    elif r < cdf1:
+        g = min(g1, g2); return "draw", g, g
+    return team2, min(g1, g2), max(g1 + 1, g2)
 
 
-def simulate_group(group_teams, prob_cache, elo_dict, beta_home, beta_away):
-
-    table = {
-        team: {"points": 0, "gd": 0, "goals": 0}
-        for team in group_teams
-    }
+def simulate_group(group_teams, mc):
+    table = {team: {"points": 0, "gd": 0, "goals": 0} for team in group_teams}
 
     for team_a, team_b in combinations(group_teams, 2):
-
-        result, g1, g2 = simulate_match_hybrid(
-            team_a, team_b,
-            prob_cache,
-            elo_dict,
-            beta_home,
-            beta_away
-        )
+        result, g1, g2 = simulate_match_fast(team_a, team_b, mc, need_goals=True)
 
         table[team_a]["goals"] += g1
         table[team_b]["goals"] += g2
-
         table[team_a]["gd"] += g1 - g2
         table[team_b]["gd"] += g2 - g1
 
@@ -192,71 +240,38 @@ def simulate_group(group_teams, prob_cache, elo_dict, beta_home, beta_away):
 
 def normalize_standings(sorted_items):
     return [
-        {
-            "team": team,
-            "points": stats["points"],
-            "gd": stats["gd"],
-            "goals": stats["goals"]
-        }
-        for team, stats in sorted_items
+        {"team": team, "points": s["points"], "gd": s["gd"], "goals": s["goals"]}
+        for team, s in sorted_items
     ]
 
 
-def simulate_group_stage(groups, prob_cache, elo_dict, beta_home, beta_away):
-
+def simulate_group_stage(groups, mc):
     group_results = {}
     third_place = []
-
     for group_name, teams in groups.items():
-
-        standings_raw = simulate_group(
-            teams,
-            prob_cache,
-            elo_dict,
-            beta_home,
-            beta_away
-        )
-
-        standings = normalize_standings(standings_raw)
+        standings = normalize_standings(simulate_group(teams, mc))
         group_results[group_name] = standings
-
-        third_place.append({
-            "group": group_name,
-            "team": standings[2]["team"],
-            "stats": standings[2]
-        })
-
+        third_place.append({"group": group_name, "team": standings[2]["team"],
+                            "stats": standings[2]})
     return group_results, third_place
 
 
 def get_best_third_places(third_place):
-
-    ranked = sorted(
+    return sorted(
         third_place,
-        key=lambda x: (
-            x["stats"]["points"],
-            x["stats"]["gd"],
-            x["stats"]["goals"]
-        ),
+        key=lambda x: (x["stats"]["points"], x["stats"]["gd"], x["stats"]["goals"]),
         reverse=True
-    )
-
-    return ranked[:8]
+    )[:8]
 
 
 def get_knockout_teams(group_results, best_thirds):
-
     teams = []
-
     for group, standings in group_results.items():
         teams.append(standings[0]["team"])
         teams.append(standings[1]["team"])
-
     for item in best_thirds:
         teams.append(item["team"])
-
     assert len(teams) == 32
-
     return teams
 
 
@@ -265,13 +280,7 @@ def seed_knockout(teams, elo_dict):
 
 
 def seeding_order(n):
-    """Standard single-elimination seed order for a power-of-two field.
-
-    Returns 1-indexed seeds arranged so that adjacent pairs are
-    (1 vs n), (2 vs n-1), ... and stronger seeds are kept maximally
-    apart: #1 and #2 can only meet in the final, the top 4 land in
-    four different quarters, and so on.
-    """
+    """Standard single-elimination seed order for a power-of-two field."""
     assert n & (n - 1) == 0, "n must be a power of two"
     order = [1, 2]
     while len(order) < n:
@@ -284,157 +293,110 @@ def seeding_order(n):
     return order
 
 
-def bracket_seed_teams(teams, elo_dict):
-    """Order the 32 qualifiers into a properly seeded bracket.
+_SEED_ORDER_32 = seeding_order(32)
 
-    Teams are ranked by Elo (1 = strongest), then placed into the standard
-    bracket positions so the field is spread instead of pairing #1 vs #2.
-    """
-    ranked = seed_knockout(teams, elo_dict)          # index 0 = strongest
-    order = seeding_order(len(ranked))               # 1-indexed seeds in bracket order
-    return [ranked[s - 1] for s in order]
+
+def bracket_seed_teams(teams, elo_dict):
+    ranked = seed_knockout(teams, elo_dict)
+    return [ranked[s - 1] for s in _SEED_ORDER_32]
 
 
 def create_bracket(teams):
     return [(teams[i], teams[-i - 1]) for i in range(len(teams) // 2)]
 
 
-def simulate_knockout_round(teams, prob_cache, elo_dict, beta_home, beta_away):
-
-    matches = [(teams[i], teams[i + 1]) for i in range(0, len(teams), 2)]
+def simulate_knockout_round(teams, mc):
     winners = []
-
-    for t1, t2 in matches:
-        result, _, _ = simulate_match_hybrid(
-            t1, t2,
-            prob_cache,
-            elo_dict,
-            beta_home,
-            beta_away
-        )
-
+    for i in range(0, len(teams), 2):
+        t1, t2 = teams[i], teams[i + 1]
+        result, _, _ = simulate_match_fast(t1, t2, mc, need_goals=False)
         if result == "draw":
-            winners.append(np.random.choice([t1, t2]))  # penalties
+            winners.append(t1 if _random() < 0.5 else t2)   # penalties
         else:
             winners.append(result)
-
     return winners
 
 
-def simulate_tournament(groups, prob_cache, elo_dict, beta_home, beta_away):
-
-    progression = {
-        team: {"R32": 0, "R16": 0, "QF": 0, "SF": 0, "Final": 0, "Winner": 0}
-        for team in [t for g in groups.values() for t in g]
-    }
-
-    # ---------------------------
-    # GROUP STAGE
-    # ---------------------------
-    group_results, third_place = simulate_group_stage(
-        groups, prob_cache, elo_dict, beta_home, beta_away
-    )
-
+def simulate_tournament(groups, mc, elo_dict):
+    group_results, third_place = simulate_group_stage(groups, mc)
     best_thirds = get_best_third_places(third_place)
     knockout_teams = get_knockout_teams(group_results, best_thirds)
 
-    for t in knockout_teams:
-        progression[t]["R32"] = 1
-
-    # Proper bracket seeding: spread the field (#1 vs #32, ...) instead of
-    # pairing the two strongest teams together in the Round of 32.
     seeded = bracket_seed_teams(knockout_teams, elo_dict)
 
-    bracket = {}
-
-    # ---------------------------
-    # R32
-    # ---------------------------
-    r32 = simulate_knockout_round(seeded, prob_cache, elo_dict, beta_home, beta_away)
-    r32_matches = [(seeded[i], seeded[i + 1]) for i in range(0, 32, 2)]
-    bracket["R32"] = {"matches": r32_matches, "winners": r32}
-
-    for t in r32:
-        progression[t]["R16"] += 1
-
-    # ---------------------------
-    # R16
-    # ---------------------------
-    r16 = simulate_knockout_round(r32, prob_cache, elo_dict, beta_home, beta_away)
-    r16_matches = [(r32[i], r32[i + 1]) for i in range(0, 16, 2)]
-    bracket["R16"] = {"matches": r16_matches, "winners": r16}
-
-    for t in r16:
-        progression[t]["QF"] += 1
-
-    # ---------------------------
-    # QF
-    # ---------------------------
-    qf = simulate_knockout_round(r16, prob_cache, elo_dict, beta_home, beta_away)
-    qf_matches = [(r16[i], r16[i + 1]) for i in range(0, 8, 2)]
-    bracket["QF"] = {"matches": qf_matches, "winners": qf}
-
-    for t in qf:
-        progression[t]["SF"] += 1
-
-    # ---------------------------
-    # SF
-    # ---------------------------
-    sf = simulate_knockout_round(qf, prob_cache, elo_dict, beta_home, beta_away)
-    sf_matches = [(qf[i], qf[i + 1]) for i in range(0, 4, 2)]
-    bracket["SF"] = {"matches": sf_matches, "winners": sf}
-
-    for t in sf:
-        progression[t]["Final"] += 1
-
-    # ---------------------------
-    # FINAL
-    # ---------------------------
-    final = simulate_knockout_round(sf, prob_cache, elo_dict, beta_home, beta_away)
-    final_match = [(sf[0], sf[1])]
-    bracket["Final"] = {"matches": final_match, "winners": final}
-
+    r32 = simulate_knockout_round(seeded, mc)
+    r16 = simulate_knockout_round(r32, mc)
+    qf = simulate_knockout_round(r16, mc)
+    sf = simulate_knockout_round(qf, mc)
+    final = simulate_knockout_round(sf, mc)
     winner = final[0]
 
-    for t in final:
-        progression[t]["Winner"] += 1
+    bracket = {
+        "R32": {"matches": [(seeded[i], seeded[i + 1]) for i in range(0, 32, 2)], "winners": r32},
+        "R16": {"matches": [(r32[i], r32[i + 1]) for i in range(0, 16, 2)], "winners": r16},
+        "QF": {"matches": [(r16[i], r16[i + 1]) for i in range(0, 8, 2)], "winners": qf},
+        "SF": {"matches": [(qf[i], qf[i + 1]) for i in range(0, 4, 2)], "winners": sf},
+        "Final": {"matches": [(sf[0], sf[1])], "winners": final},
+    }
 
-    return winner, progression, group_results, bracket
+    stage_teams = {
+        "R32": knockout_teams,   # reached R32
+        "R16": r32,              # won R32
+        "QF": r16,
+        "SF": qf,
+        "Final": sf,
+        "Winner": final,
+    }
+    return winner, stage_teams, group_results, bracket
 
 
 def run_simulations(n, groups, prob_cache, elo_dict, beta_home, beta_away):
+    all_teams = [t for g in groups.values() for t in g]
+
+    # Build the per-pair cache ONCE (this is the big win).
+    mc = build_match_cache(all_teams, prob_cache, elo_dict, beta_home, beta_away)
 
     winners = []
-
     progression_totals = {
-        team: {"R32": 0, "R16": 0, "QF": 0, "SF": 0, "Final": 0, "Winner": 0}
-        for team in [t for g in groups.values() for t in g]
+        t: {"R32": 0, "R16": 0, "QF": 0, "SF": 0, "Final": 0, "Winner": 0}
+        for t in all_teams
     }
 
+    # Keep ONE sample tournament per distinct champion. After the loop we show
+    # the one belonging to the most likely champion, so the displayed bracket
+    # is internally consistent (the champion appears in its own Final) and
+    # looks realistic (it ends with the favourite, not a random upset).
+    sample_bracket = {}
+    sample_groups = {}
     first_bracket = None
     first_group_results = None
 
     for i in range(n):
-
-        winner, progression, group_results, bracket = simulate_tournament(
-            groups,
-            prob_cache,
-            elo_dict,
-            beta_home,
-            beta_away
-        )
-
+        winner, stage_teams, group_results, bracket = simulate_tournament(groups, mc, elo_dict)
         winners.append(winner)
 
-        for team in progression:
-            for stage in progression[team]:
-                progression_totals[team][stage] += progression[team][stage]
+        for stage, tlist in stage_teams.items():
+            for t in tlist:
+                progression_totals[t][stage] += 1
 
         if i == 0:
             first_bracket = bracket
             first_group_results = group_results
+        if winner not in sample_bracket:
+            sample_bracket[winner] = bracket
+            sample_groups[winner] = group_results
 
-    return dict(Counter(winners)), progression_totals, first_group_results, first_bracket
+    results = dict(Counter(winners))
+
+    # Representative tournament = one that the MODAL champion actually won.
+    if results:
+        modal_champion = max(results, key=results.get)
+        rep_bracket = sample_bracket.get(modal_champion, first_bracket)
+        rep_groups = sample_groups.get(modal_champion, first_group_results)
+    else:
+        rep_bracket, rep_groups = first_bracket, first_group_results
+
+    return results, progression_totals, rep_groups, rep_bracket
 
 
 def normalize_progression(progression_totals, n):
