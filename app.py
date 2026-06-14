@@ -133,6 +133,58 @@ st.markdown("""
 /* the gold pill marks the active tab, so hide the default sliding underline */
 .stTabs [data-baseweb="tab-highlight"] { background-color: transparent; }
 
+/* ---- Primary buttons (Run Simulation) -> gold pill, navy text ---- */
+.stButton > button[kind="primary"],
+.stButton > button[data-testid="baseButton-primary"] {
+    background: #F5C518 !important;
+    color: #0B1F3A !important;
+    border: 1px solid #F5C518 !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em !important;
+    box-shadow: 0 6px 16px rgba(245,197,24,0.22) !important;
+    transition: filter .15s ease, transform .05s ease !important;
+}
+.stButton > button[kind="primary"]:hover,
+.stButton > button[data-testid="baseButton-primary"]:hover {
+    filter: brightness(1.06) !important;
+    border-color: #F5C518 !important;
+    color: #0B1F3A !important;
+}
+.stButton > button[kind="primary"]:active { transform: translateY(1px) !important; }
+.stButton > button[kind="primary"]:focus {
+    box-shadow: 0 0 0 3px rgba(245,197,24,0.35) !important;
+}
+
+/* Secondary / default buttons -> navy outline that matches the nav bar */
+.stButton > button[kind="secondary"] {
+    background: #0B1F3A !important;
+    color: #F5C518 !important;
+    border: 1px solid rgba(245,197,24,0.45) !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+}
+.stButton > button[kind="secondary"]:hover {
+    border-color: #F5C518 !important;
+    color: #F5C518 !important;
+}
+
+/* ---- Sliders -> gold track + gold handle (the simulations slider) ---- */
+/* filled portion of the track */
+.stSlider [data-baseweb="slider"] [data-testid="stSliderTrack"] > div {
+    background: #F5C518 !important;
+}
+/* the draggable thumb */
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background-color: #F5C518 !important;
+    border-color: #F5C518 !important;
+    box-shadow: 0 0 0 4px rgba(245,197,24,0.18) !important;
+}
+/* the current-value bubble + min/max labels */
+.stSlider [data-testid="stTickBarMin"],
+.stSlider [data-testid="stTickBarMax"] { color: #93a4ba !important; }
+.stSlider div[data-baseweb="slider"] div[role="slider"] + div { color: #F5C518 !important; }
+
 /* ---- Group cards ---- */
 .group-card {
     background: linear-gradient(160deg, #0d2143 0%, #0b1424 100%);
