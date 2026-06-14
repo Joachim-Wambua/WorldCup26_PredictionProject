@@ -170,7 +170,11 @@ st.markdown("""
 }
 
 /* ---- Sliders -> gold track + gold handle (the simulations slider) ---- */
-/* filled portion of the track */
+/* base/unfilled track (the trailing portion to the right of the handle) */
+.stSlider [data-baseweb="slider"] [data-testid="stSliderTrack"] {
+    background: rgba(245,197,24,0.22) !important;
+}
+/* filled portion of the track (left of the handle) */
 .stSlider [data-baseweb="slider"] [data-testid="stSliderTrack"] > div {
     background: #F5C518 !important;
 }
