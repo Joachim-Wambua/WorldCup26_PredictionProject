@@ -268,6 +268,25 @@ beta_home, beta_away = get_poisson_params(df)
 
 
 # ---------------------------
+# SIMULATION RUNNER (single source of truth — called by either Run button)
+# ---------------------------
+def run_and_store(n):
+    with st.spinner(f"Simulating World Cup 2026 — {n:,} tournaments..."):
+        results, progression, group_results, bracket = run_simulations(
+            n, world_cup_2026_groups, prob_cache, elo_dict, beta_home, beta_away
+        )
+    st.session_state["results"] = results
+    st.session_state["progression"] = progression
+    st.session_state["n_sims"] = n
+    st.session_state["group_results"] = group_results
+    st.session_state["bracket"] = bracket
+
+
+SIM_HELP = ("More runs = smoother odds. 1,000 is plenty for a quick look; "
+            "5,000 for stable probabilities.")
+
+
+# ---------------------------
 # GROUP STAGE CARD
 # ---------------------------
 def render_group_card(group_name, standings):
@@ -450,16 +469,16 @@ def render_match_predictor():
 
 
 # ---------------------------
-# SIDEBAR — SIMULATION CONTROLS ONLY
+# SIDEBAR — SIMULATION CONTROLS (unique keys: *_side)
 # ---------------------------
 with st.sidebar:
     st.markdown("### Simulation Controls")
-    n_sims = st.slider(
+    n_sims_side = st.slider(
         "Number of simulations", 100, 5000, 1000, step=100,
-        help="More runs = smoother odds. 1,000 is plenty for a quick look; "
-             "5,000 for stable probabilities.",
+        key="n_sims_side", help=SIM_HELP,
     )
-    run = st.button("▶  Run Simulation", use_container_width=True, type="primary")
+    run_side = st.button("▶  Run Simulation", use_container_width=True,
+                         type="primary", key="run_side")
     st.caption("Each run plays out the whole tournament thousands of times.")
 
     st.divider()
@@ -472,20 +491,9 @@ with st.sidebar:
             "- **Team Explorer** — how far each team is likely to go"
         )
 
-
-# ---------------------------
-# RUN SIMULATION (compute once, store in session)
-# ---------------------------
-if run:
-    with st.spinner(f"Simulating World Cup 2026 — {n_sims:,} tournaments..."):
-        results, progression, group_results, bracket = run_simulations(
-            n_sims, world_cup_2026_groups, prob_cache, elo_dict, beta_home, beta_away
-        )
-    st.session_state["results"] = results
-    st.session_state["progression"] = progression
-    st.session_state["n_sims"] = n_sims
-    st.session_state["group_results"] = group_results
-    st.session_state["bracket"] = bracket
+# Sidebar button runs the sim BEFORE the tabs render, so results show immediately.
+if run_side:
+    run_and_store(n_sims_side)
 
 
 # ===========================================================================
@@ -512,14 +520,21 @@ with tab_sim:
             "**▶ Run Simulation** to generate a knockout bracket, group tables, and title odds."
         )
 
+        # In-tab controls use unique keys (*_tab) to avoid the DuplicateWidgetID clash.
         st.markdown("### Simulation Controls")
-        n_sims = st.slider(
+        n_sims_tab = st.slider(
             "Number of simulations", 100, 5000, 1000, step=100,
-            help="More runs = smoother odds. 1,000 is plenty for a quick look; "
-                "5,000 for stable probabilities.",
+            key="n_sims_tab", help=SIM_HELP,
         )
-        run = st.button("▶  Run Simulation", use_container_width=True, type="primary")
+        run_tab = st.button("▶  Run Simulation", use_container_width=True,
+                            type="primary", key="run_tab")
         st.caption("Each run plays out the whole tournament thousands of times.")
+
+        # This button is defined after the sidebar's run check, so trigger the
+        # run here and rerun — the rerun then falls into the results branch.
+        if run_tab:
+            run_and_store(n_sims_tab)
+            st.rerun()
     else:
         results = st.session_state["results"]
         progression = st.session_state["progression"]
@@ -542,8 +557,7 @@ with tab_sim:
 
         st.divider()
 
-
-         # --- Group stage ---
+        # --- Group stage ---
         st.subheader("Group Stage Standings")
         st.caption("Top two of each group (green) advance, plus the eight best third-placed teams.")
         cols = st.columns(4)
