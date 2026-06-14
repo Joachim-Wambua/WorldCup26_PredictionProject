@@ -169,13 +169,23 @@ st.markdown("""
     color: #F5C518 !important;
 }
 
-/* ---- Sliders -> gold track + gold handle (the simulations slider) ---- */
-/* base/unfilled track (the trailing portion to the right of the handle) */
-.stSlider [data-baseweb="slider"] [data-testid="stSliderTrack"] {
-    background: rgba(245,197,24,0.22) !important;
+/* ---- Sliders -> gold track + gold handle (the simulations slider) ----
+   Streamlit/BaseWeb renders the track as nested divs whose data-testid
+   varies by version, so target the track structurally: the slider's inner
+   bars are the direct div children of the [role=slider]'s parent. We paint
+   the whole bar gold-tinted, then the filled segment solid gold. */
+.stSlider [data-baseweb="slider"] > div > div {
+    background: rgba(245,197,24,0.25) !important;   /* full track base */
 }
-/* filled portion of the track (left of the handle) */
+.stSlider [data-baseweb="slider"] > div > div > div {
+    background: #F5C518 !important;                 /* filled segment */
+}
+/* keep any remaining red from the highlighted/active fill */
+.stSlider [data-baseweb="slider"] [data-testid="stSliderTrack"],
 .stSlider [data-baseweb="slider"] [data-testid="stSliderTrack"] > div {
+    background: rgba(245,197,24,0.25) !important;
+}
+.stSlider [data-baseweb="slider"] [data-testid="stSliderTrack"] > div:first-child {
     background: #F5C518 !important;
 }
 /* the draggable thumb */
